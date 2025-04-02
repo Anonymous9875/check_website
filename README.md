@@ -1,4 +1,4 @@
-#check_website
+# check_website:
 
 Tool to check if a website is down
 Using check-host.net
