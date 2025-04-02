@@ -23,7 +23,7 @@ def check_website_status(url):
         }
         
         # Hacer la solicitud GET a la API
-        response = requests.get(api_url, headers=headers, timeout=10)
+        response = requests.get(api_url, headers=headers, timeout=90)
         
         # Verificar si la solicitud fue exitosa
         if response.status_code == 200:
