@@ -38,11 +38,11 @@ def check_website_status(url):
             
             # Esperar y verificar el resultado
             print(f"\nVerificando {url} en tiempo real...")
-            max_attempts = 10
+            max_attempts = 200
             attempt = 0
             
             while attempt < max_attempts:
-                result_response = requests.get(result_url, headers=headers, timeout=10)
+                result_response = requests.get(result_url, headers=headers, timeout=200)
                 if result_response.status_code == 200:
                     result_data = result_response.json()
                     
