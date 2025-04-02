@@ -78,7 +78,7 @@ def main():
         # Solicitar URL al usuario
         website = input("Ingresa la URL a verificar (ejemplo: https://google.com) o 'exit' para terminar: ")
         
-        if website.lower() == 'salir':
+        if website.lower() == 'exit':
             print("¡Hasta luego!")
             break
             
