@@ -1,6 +1,12 @@
 import requests
 import json
 from urllib.parse import quote
+import os
+import sys
+
+def clear_screen():
+    """Limpia la pantalla según el sistema operativo."""
+    os.system('clear' if os.name == 'posix' else 'cls')
 
 def check_website_status(url):
     try:
@@ -13,7 +19,7 @@ def check_website_status(url):
         # Headers necesarios para la solicitud
         headers = {
             "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
         }
         
         # Hacer la solicitud GET a la API
@@ -30,9 +36,9 @@ def check_website_status(url):
                 
                 for node, result in nodes.items():
                     if result[0] == 1:
-                        print(f"✓ {node}: Online (Tiempo de respuesta: {result[2]}s)")
+                        print(f"[+] {node}: Online (Tiempo de respuesta: {result[2]}s)")
                     else:
-                        print(f"✗ {node}: Offline")
+                        print(f"[-] {node}: Offline")
             else:
                 print("Error en la verificación. Intenta de nuevo.")
         else:
@@ -44,6 +50,19 @@ def check_website_status(url):
         print("Error al procesar la respuesta del servidor")
 
 def main():
+    # Verificar si requests está instalado
+    try:
+        import requests
+    except ImportError:
+        print("Error: La librería 'requests' no está instalada.")
+        print("Instálala con: pip install requests")
+        print("En Termux, usa: pkg install python && pip install requests")
+        sys.exit(1)
+
+    # Configurar codificación UTF-8
+    sys.stdout.reconfigure(encoding='utf-8') if hasattr(sys.stdout, 'reconfigure') else None
+
+    clear_screen()
     print("Herramienta para verificar si una página web está caída")
     print("Utilizando check-host.net")
     print("----------------------------------------")
