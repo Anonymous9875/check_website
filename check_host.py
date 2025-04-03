@@ -5,9 +5,22 @@ import os
 import sys
 import time
 
+# Códigos ANSI para colores
+COLOR_RESET = "\033[0m"
+COLOR_RED = "\033[31m"
+COLOR_GREEN = "\033[32m"
+COLOR_YELLOW = "\033[33m"
+COLOR_CYAN = "\033[36m"
+COLOR_WHITE = "\033[37m"
+COLOR_BOLD = "\033[1m"
+
 def clear_screen():
     """Limpia la pantalla según el sistema operativo."""
     os.system('clear' if os.name == 'posix' else 'cls')
+
+def print_color(text, color):
+    """Imprime texto en el color especificado."""
+    print(f"{color}{text}{COLOR_RESET}")
 
 def check_website_status(url):
     try:
@@ -35,8 +48,8 @@ def check_website_status(url):
                 request_id = data["request_id"]
                 nodes = data["nodes"]
                 
-                print(f"\nVerificando: {url}")
-                print("Esperando resultados de los servidores...")
+                print_color(f"\nVerificando: {url}", COLOR_CYAN)
+                print_color("Esperando resultados de los servidores...", COLOR_YELLOW)
                 
                 # Esperar unos segundos para que los servidores completen las pruebas
                 time.sleep(5)
@@ -49,7 +62,7 @@ def check_website_status(url):
                     results = result_response.json()
                     
                     if results:
-                        print(f"\nResultados para: {url}")
+                        print_color(f"\nResultados para: {url}", COLOR_CYAN)
                         for node in nodes:
                             if node in results and results[node] is not None:
                                 node_result = results[node][0]
@@ -57,38 +70,38 @@ def check_website_status(url):
                                     if node_result[0] is not None:
                                         if node_result[0] == 1:
                                             response_time = node_result[1] if len(node_result) > 1 else "N/A"
-                                            print(f"[+] {node}: Online (Tiempo de respuesta: {response_time:.3f}s)")
+                                            print_color(f"[+] {node}: Online (Tiempo de respuesta: {response_time:.3f}s)", COLOR_GREEN)
                                         else:
                                             error_msg = node_result[1] if len(node_result) > 1 else "Error desconocido"
-                                            print(f"[-] {node}: Offline (Error: {error_msg})")
+                                            print_color(f"[-] {node}: Offline (Error: {error_msg})", COLOR_RED)
                                     else:
-                                        print(f"[?] {node}: No se pudo determinar el estado")
+                                        print_color(f"[?] {node}: No se pudo determinar el estado", COLOR_YELLOW)
                                 else:
-                                    print(f"[?] {node}: Formato de respuesta inesperado")
+                                    print_color(f"[?] {node}: Formato de respuesta inesperado", COLOR_YELLOW)
                             else:
-                                print(f"[?] {node}: No hay datos disponibles")
+                                print_color(f"[?] {node}: No hay datos disponibles", COLOR_YELLOW)
                     else:
-                        print("Los resultados aún no están disponibles. Intenta nuevamente más tarde.")
+                        print_color("Los resultados aún no están disponibles. Intenta nuevamente más tarde.", COLOR_YELLOW)
                 else:
-                    print(f"Error al obtener resultados: Código {result_response.status_code}")
+                    print_color(f"Error al obtener resultados: Código {result_response.status_code}", COLOR_RED)
             else:
-                print("Error: No se pudo iniciar la verificación. La respuesta del servidor no contiene request_id.")
+                print_color("Error: No se pudo iniciar la verificación. La respuesta del servidor no contiene request_id.", COLOR_RED)
         else:
-            print(f"Error en la solicitud: Código {response.status_code}")
+            print_color(f"Error en la solicitud: Código {response.status_code}", COLOR_RED)
             
     except requests.exceptions.RequestException as e:
-        print(f"Error de conexión: {str(e)}")
+        print_color(f"Error de conexión: {str(e)}", COLOR_RED)
     except json.JSONDecodeError:
-        print("Error al procesar la respuesta del servidor")
+        print_color("Error al procesar la respuesta del servidor", COLOR_RED)
 
 def main():
     # Verificar si requests está instalado
     try:
         import requests
     except ImportError:
-        print("Error: La librería 'requests' no está instalada.")
-        print("Instálala con: pip install requests")
-        print("En Termux, usa: pkg install python && pip install requests")
+        print_color("Error: La librería 'requests' no está instalada.", COLOR_RED)
+        print_color("Instálala con: pip install requests", COLOR_YELLOW)
+        print_color("En Termux, usa: pkg install python && pip install requests", COLOR_YELLOW)
         sys.exit(1)
 
     # Configurar codificación UTF-8
@@ -96,16 +109,16 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
 
     clear_screen()
-    print("Herramienta para verificar si una página web está caída")
-    print("Utilizando check-host.net")
-    print("----------------------------------------")
+    print_color("Herramienta para verificar si una página web está caída", COLOR_BOLD + COLOR_CYAN)
+    print_color("Utilizando check-host.net", COLOR_WHITE)
+    print_color("----------------------------------------", COLOR_WHITE)
     
     while True:
         # Solicitar URL al usuario
-        website = input("Ingresa la URL a verificar (ejemplo: google.com) o 'salir' para terminar: ").strip()
+        website = input(f"{COLOR_WHITE}Ingresa la URL a verificar (ejemplo: google.com) o 'salir' para terminar: {COLOR_RESET}").strip()
         
         if website.lower() == 'salir':
-            print("¡Hasta luego!")
+            print_color("¡Hasta luego!", COLOR_CYAN)
             break
             
         # Asegurarse de que la URL tenga el protocolo
@@ -115,7 +128,7 @@ def main():
         # Verificar el estado del sitio
         check_website_status(website)
         
-        print("\n----------------------------------------")
+        print_color("\n----------------------------------------", COLOR_WHITE)
 
 if __name__ == "__main__":
     main()
