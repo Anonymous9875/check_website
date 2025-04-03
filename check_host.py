@@ -115,9 +115,9 @@ def main():
     
     while True:
         # Solicitar URL al usuario
-        website = input(f"{COLOR_GREEN}Ingresa la URL a verificar (ejemplo: google.com) o 'salir' para terminar: {COLOR_RESET}").strip()
+        website = input(f"{COLOR_GREEN}Ingresa la URL a verificar (ejemplo: google.com) o 'exit' para terminar: {COLOR_RESET}").strip()
         
-        if website.lower() == 'salir':
+        if website.lower() == 'exit':
             print_color("¡Hasta luego!", COLOR_CYAN)
             break
             
