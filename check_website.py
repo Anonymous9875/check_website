@@ -48,9 +48,9 @@ def check_website_status(url):
                     status_code = status[1]   # Código de estado HTTP
                     
                     if status_code == 200:
-                        status_summary.append(f"\nNodo {node}: Online (Tiempo: {response_time}s)")
+                        status_summary.append(f"Nodo {node}: Online (Tiempo: {response_time}s)")
                     else:
-                        status_summary.append(f"\nNodo {node}: Problema (Código: {status_code})")
+                        status_summary.append(f"Nodo {node}: Problema (Código: {status_code})")
         
         if not status_summary:
             return "No se obtuvieron resultados válidos"
@@ -87,7 +87,7 @@ if __name__ == "__main__":
         if not website.startswith("http"):
             website = "http://" + website
         
-        print(f"\nVerificando {website}...")
+        print(f"\nVerificando {website}...\n")
         result = check_website_status(website)
         print(result)
         input("\nPresiona Enter para continuar...")  # Pausa para ver resultados
