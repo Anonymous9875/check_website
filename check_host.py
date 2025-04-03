@@ -110,12 +110,12 @@ def main():
 
     clear_screen()
     print_color("Herramienta para verificar si una página web está caída", COLOR_BOLD + COLOR_CYAN)
-    print_color("Utilizando check-host.net", COLOR_WHITE)
+    print_color("Utilizando check-host.net", COLOR_YELLOW)
     print_color("----------------------------------------", COLOR_WHITE)
     
     while True:
         # Solicitar URL al usuario
-        website = input(f"{COLOR_WHITE}Ingresa la URL a verificar (ejemplo: google.com) o 'salir' para terminar: {COLOR_RESET}").strip()
+        website = input(f"{COLOR_GREEN}Ingresa la URL a verificar (ejemplo: google.com) o 'salir' para terminar: {COLOR_RESET}").strip()
         
         if website.lower() == 'salir':
             print_color("¡Hasta luego!", COLOR_CYAN)
