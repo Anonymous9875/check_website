@@ -19,11 +19,10 @@ def check_website_status(url: str) -> None:
         encoded_url = quote(url, safe=':/')
         
         # URL de la API con parámetros optimizados
-        api_url = f"https://check-host.net/check-http?host={encoded_url}&max_nodes=47"
+        api_url = f"https://check-host.net/check-result/806dfa"
         
         headers = {
-            curl -H "Accept: application/json" \
-            https://check-host.net/check-result/806dfa,
+            "Accept": "application/json",
             "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
         }
         
