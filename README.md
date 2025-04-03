@@ -31,7 +31,7 @@ Results for: https://google.com
    
 2. Install requests:
   
-   pip3 install requests
+   pip install colorama requests
    
 3. run:
 
@@ -44,7 +44,7 @@ python3 check_website.py
    
 2. Install requests:
   
-   pip install requests
+   pip install colorama requests
 
 3. run:
 
