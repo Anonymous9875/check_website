@@ -10,16 +10,13 @@ def clear_screen():
     """Limpia la pantalla según el sistema operativo."""
     os.system('clear' if os.name == 'posix' else 'cls')
 
-def check_website_status(url: str) -> None:
+def check_website_status(result_id: str) -> None:
     """
-    Verifica el estado de un sitio web usando check-host.net y mide tiempos de respuesta.
+    Verifica el estado de un sitio web usando check-host.net y muestra resultados.
     """
     try:
-        # Codificar la URL para la solicitud
-        encoded_url = quote(url, safe=':/')
-        
-        # URL de la API con parámetros optimizados
-        api_url = f"https://check-host.net/check-result/806dfa"
+        # URL de la API con el ID de resultado proporcionado
+        api_url = f"https://check-host.net/check-result/{result_id}"
         
         headers = {
             "Accept": "application/json",
@@ -37,40 +34,37 @@ def check_website_status(url: str) -> None:
             try:
                 data = response.json()
                 
-                if data.get("ok") == 1:
-                    print(f"\nResultados para: {url}")
-                    print(f"Tiempo de solicitud inicial: {request_time}s")
+                print(f"\nResultados para ID: {result_id}")
+                print(f"Tiempo de solicitud: {request_time}s")
+                
+                nodes: Dict[str, Any] = data.get("nodes", {})
+                if not nodes:
+                    print("No se obtuvieron resultados de nodos. Verificación en proceso o ID inválido...")
+                    return
+                
+                online_count = 0
+                total_nodes = len(nodes)
+                
+                # Procesar y mostrar resultados por nodo
+                for node, result in sorted(nodes.items()):
+                    status = result[0] if result else 0
+                    response_time = result[2] if result and len(result) > 2 and result[2] is not None else "N/A"
                     
-                    nodes: Dict[str, Any] = data.get("nodes", {})
-                    if not nodes:
-                        print("No se obtuvieron resultados de nodos. Verificación en proceso...")
-                        return
-                    
-                    online_count = 0
-                    total_nodes = len(nodes)
-                    
-                    # Procesar y mostrar resultados por nodo
-                    for node, result in sorted(nodes.items()):
-                        status = result[0] if result else 0
-                        response_time = result[2] if result and len(result) > 2 and result[2] is not None else "N/A"
-                        
-                        if status == 1:
-                            status_str = f"[+] {node}: Online"
-                            online_count += 1
-                            if isinstance(response_time, (int, float)):
-                                time_str = f"{response_time:.3f}s"
-                            else:
-                                time_str = "Tiempo no disponible"
-                            print(f"{status_str} (Respuesta: {time_str})")
+                    if status == 1:
+                        status_str = f"[+] {node}: Online"
+                        online_count += 1
+                        if isinstance(response_time, (int, float)):
+                            time_str = f"{response_time:.3f}s"
                         else:
-                            print(f"[-] {node}: Offline")
-                    
-                    # Mostrar resumen
-                    percentage = (online_count / total_nodes) * 100
-                    print(f"\nResumen: {online_count}/{total_nodes} nodos online ({percentage:.1f}%)")
-                    
-                else:
-                    print("Error en la verificación del servidor.")
+                            time_str = "Tiempo no disponible"
+                        print(f"{status_str} (Respuesta: {time_str})")
+                    else:
+                        print(f"[-] {node}: Offline")
+                
+                # Mostrar resumen
+                percentage = (online_count / total_nodes) * 100
+                print(f"\nResumen: {online_count}/{total_nodes} nodos online ({percentage:.1f}%)")
+                
             except json.JSONDecodeError:
                 print("Error: Respuesta del servidor no válida (JSON corrupto)")
         else:
@@ -83,8 +77,25 @@ def check_website_status(url: str) -> None:
     except Exception as e:
         print(f"Error inesperado: {str(e)}")
 
+def initiate_check(url: str) -> str:
+    """Inicia una verificación en check-host.net y devuelve el ID del resultado."""
+    try:
+        api_url = f"https://check-host.net/check-http?host={quote(url, safe=':/')}"
+        headers = {
+            "Accept": "application/json",
+            "User-Agent": "Mozilla/5.0"
+        }
+        
+        response = requests.get(api_url, headers=headers, timeout=30)
+        if response.status_code == 200:
+            data = response.json()
+            return data.get("request_id", "")
+        return ""
+    except Exception as e:
+        print(f"Error al iniciar verificación: {str(e)}")
+        return ""
+
 def main():
-    # Verificar dependencias
     try:
         import requests
     except ImportError:
@@ -92,13 +103,12 @@ def main():
         print("Instálala con: pip install requests")
         sys.exit(1)
 
-    # Configurar codificación
     if hasattr(sys.stdout, 'reconfigure'):
         sys.stdout.reconfigure(encoding='utf-8')
 
     clear_screen()
     print("Herramienta de verificación de sitios web")
-    print("Powered by check-host.net (max 47 nodos)")
+    print("Powered by check-host.net")
     print("----------------------------------------")
     
     while True:
@@ -116,7 +126,18 @@ def main():
         if not website.startswith(('http://', 'https://')):
             website = 'https://' + website
             
-        check_website_status(website)
+        # Iniciar la verificación y obtener el ID
+        result_id = initiate_check(website)
+        if not result_id:
+            print("No se pudo obtener un ID de resultado")
+            continue
+            
+        print(f"ID de resultado obtenido: {result_id}")
+        print("Esperando resultados (puede tomar unos segundos)...")
+        time.sleep(5)  # Esperar un poco para que los resultados estén listos
+        
+        # Verificar el estado con el ID obtenido
+        check_website_status(result_id)
         print("\n----------------------------------------")
 
 if __name__ == "__main__":
