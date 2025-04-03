@@ -1,25 +1,15 @@
+#!/usr/bin/env python3
 """
+Check-Host Ping & HTTP Tester
+
 A Python utility to check host availability and response times using the Check-Host API.
 Features:
-- Ping, HTTP, TCP, UDP, DNS, IP-Lookup, and WHOIS checks
+- Ping and HTTP checks
 - Node selection by continent
 - Interactive and command-line modes
 - Colored output with failure highlighting
 - Average response time calculations by continent
 - JSON and text output formats
-
-Examples:
-  # Basic ping check
-  ./check_host.py 1.1.1.1
-
-  # TCP port check on port 443
-  ./check_host.py example.com --type tcp --port 443
-
-  # DNS check for MX records
-  ./check_host.py example.com --type dns --dns-type MX
-
-  # WHOIS lookup in interactive mode
-  ./check_host.py --type whois
 """
 
 import argparse
@@ -126,25 +116,14 @@ NODE_DETAILS = {
 }
 
 class CheckHostAPI:
-    def run_check(self, check_type: str, host: str, nodes: List[str], **kwargs) -> Dict[str, Any]:
-        if check_type not in ["ping", "http", "tcp", "udp", "dns", "ip-lookup", "whois"]:
-            raise ValueError(f"Invalid check type: {check_type}")
-        
-        url = f"{self.BASE_URL}/check-{check_type}"
-        params = {"host": host, **kwargs}
-        
-        # Nodes no aplicables para ip-lookup y whois
-        if nodes and check_type not in ["ip-lookup", "whois"]:
-            params["node"] = nodes
-        
-        """Client for the Check-Host API, focused on ping and HTTP checks."""
+    """Client for the Check-Host API, focused on ping and HTTP checks."""
     
     BASE_URL = "https://check-host.net"
     
     def __init__(self):
         """Initialize the API client with proper headers."""
         self.session = requests.Session()
-        self.session.headers.update({"Accept": "application/json"}# Lógica restante igual...
+        self.session.headers.update({"Accept": "application/json"})
     
     def run_check(self, check_type: str, host: str, nodes: List[str]) -> Dict[str, Any]:
         """
@@ -449,17 +428,6 @@ def parse_http_results(results: Dict[str, Any]) -> Dict[str, Any]:
     
     return parsed_results
 
-def parse_dns_results(results: Dict[str, Any]) -> Dict[str, Any]:
-    parsed = {"nodes_results": [], "overall_stats": {}}
-    for node, data in results.items():
-        if data is None:
-            continue
-        parsed["nodes_results"].append({
-            "node": node,
-            "data": data[0]  # Ajustar según estructura real
-        })
-    return parsed
-
 
 def display_ping_results(parsed_results: Dict[str, Any]) -> None:
     """
@@ -572,10 +540,6 @@ def display_http_results(parsed_results: Dict[str, Any]) -> None:
         
         print(f"{location:<30} {status_color}{status:<15}{Style.RESET_ALL} {response_time:<15} {result['ip']:<15}")
 
-def display_dns_results(parsed_results: Dict[str, Any]) -> None:
-    print(f"\n{Fore.CYAN}DNS RESULTS:{Style.RESET_ALL}")
-    for result in parsed_results["nodes_results"]:
-        print(f"{result['node']}: {json.dumps(result['data'], indent=2)}")
 
 def save_results_to_file(data: Dict[str, Any], filename: str, format_type: str = "json") -> None:
     """
@@ -698,7 +662,6 @@ def interactive_mode() -> None:
 def run_check_and_display(check_type: str, host: str, nodes: List[str], 
                           save_to_file: bool = False, filename: Optional[str] = None,
                           format_type: str = "json") -> None:
-
     """
     Run a check and display results.
     
@@ -733,12 +696,6 @@ def run_check_and_display(check_type: str, host: str, nodes: List[str],
         else:  # http
             parsed_results = parse_http_results(results)
             display_http_results(parsed_results)
-        if check_type == "dns":
-            parsed_results = parse_dns_results(results)
-            display_dns_results(parsed_results)
-        elif check_type == "whois":
-            print(json.dumps(results, indent=2))
-        # ... similar para tcp/udp
         
         # Add metadata
         full_results = {
