@@ -3,6 +3,7 @@ import json
 from urllib.parse import quote
 import os
 import sys
+import time
 
 def clear_screen():
     """Limpia la pantalla según el sistema operativo."""
@@ -29,27 +30,49 @@ def check_website_status(url):
         if response.status_code == 200:
             data = response.json()
             
-            # Procesar la respuesta
-            if "nodes" in data and "result" in data:
-                print(f"\nResultados para: {url}")
+            # Procesar la respuesta inicial para obtener el request_id
+            if "request_id" in data:
                 request_id = data["request_id"]
                 nodes = data["nodes"]
-                results = data["result"]
                 
-                for node in nodes:
-                    if node in results and results[node]:
-                        result = results[node][0]
-                        if isinstance(result, list) and len(result) >= 3:
-                            if result[0] == 1:
-                                print(f"[+] {node}: Online (Tiempo de respuesta: {result[1]:.2f}s)")
+                print(f"\nVerificando: {url}")
+                print("Esperando resultados de los servidores...")
+                
+                # Esperar unos segundos para que los servidores completen las pruebas
+                time.sleep(5)
+                
+                # Hacer una segunda solicitud para obtener los resultados
+                result_url = f"https://check-host.net/check-result/{request_id}"
+                result_response = requests.get(result_url, headers=headers, timeout=15)
+                
+                if result_response.status_code == 200:
+                    results = result_response.json()
+                    
+                    if results:
+                        print(f"\nResultados para: {url}")
+                        for node in nodes:
+                            if node in results and results[node] is not None:
+                                node_result = results[node][0]
+                                if isinstance(node_result, list):
+                                    if node_result[0] is not None:
+                                        if node_result[0] == 1:
+                                            response_time = node_result[1] if len(node_result) > 1 else "N/A"
+                                            print(f"[+] {node}: Online (Tiempo de respuesta: {response_time:.3f}s)")
+                                        else:
+                                            error_msg = node_result[1] if len(node_result) > 1 else "Error desconocido"
+                                            print(f"[-] {node}: Offline (Error: {error_msg})")
+                                    else:
+                                        print(f"[?] {node}: No se pudo determinar el estado")
+                                else:
+                                    print(f"[?] {node}: Formato de respuesta inesperado")
                             else:
-                                print(f"[-] {node}: Offline (Error: {result[1]})")
-                        else:
-                            print(f"[?] {node}: Respuesta inesperada del servidor")
+                                print(f"[?] {node}: No hay datos disponibles")
                     else:
-                        print(f"[?] {node}: No hay datos disponibles")
+                        print("Los resultados aún no están disponibles. Intenta nuevamente más tarde.")
+                else:
+                    print(f"Error al obtener resultados: Código {result_response.status_code}")
             else:
-                print("Error en la verificación. La respuesta del servidor no contiene los datos esperados.")
+                print("Error: No se pudo iniciar la verificación. La respuesta del servidor no contiene request_id.")
         else:
             print(f"Error en la solicitud: Código {response.status_code}")
             
