@@ -157,7 +157,7 @@ def check_website_status(url):
                     results = result_response.json()
                     
                     if results:
-                        print_color(f"\nResultados para: {url}", COLOR_CYAN)
+                        print_color(f"\nResultados para: {url}\n", COLOR_CYAN)
                         for node in nodes:
                             if node in results and results[node] is not None:
                                 node_result = results[node][0]
