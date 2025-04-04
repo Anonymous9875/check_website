@@ -1,3 +1,98 @@
+# Node data organized by continent
+NODES_BY_CONTINENT = {
+    "EU": [
+        "bg1.node.check-host.net", "ch1.node.check-host.net", "cz1.node.check-host.net",
+        "de1.node.check-host.net", "de4.node.check-host.net", "es1.node.check-host.net",
+        "fi1.node.check-host.net", "fr1.node.check-host.net", "fr2.node.check-host.net",
+        "hu1.node.check-host.net", "it2.node.check-host.net", "lt1.node.check-host.net",
+        "md1.node.check-host.net", "nl1.node.check-host.net", "nl2.node.check-host.net",
+        "pl1.node.check-host.net", "pl2.node.check-host.net", "pt1.node.check-host.net",
+        "rs1.node.check-host.net", "se1.node.check-host.net", "uk1.node.check-host.net"
+    ],
+    "AS": [
+        "hk1.node.check-host.net", "il1.node.check-host.net", "il2.node.check-host.net",
+        "in1.node.check-host.net", "in2.node.check-host.net", "ir1.node.check-host.net",
+        "ir3.node.check-host.net", "ir5.node.check-host.net", "ir6.node.check-host.net",
+        "jp1.node.check-host.net", "kz1.node.check-host.net", "tr1.node.check-host.net",
+        "tr2.node.check-host.net", "vn1.node.check-host.net"
+    ],
+    "NA": [
+        "us1.node.check-host.net", "us2.node.check-host.net", "us3.node.check-host.net"
+    ],
+    "SA": [
+        "br1.node.check-host.net"
+    ],
+    "EU-EAST": [
+        "ru1.node.check-host.net", "ru2.node.check-host.net", "ru3.node.check-host.net",
+        "ru4.node.check-host.net", "ua1.node.check-host.net", "ua2.node.check-host.net",
+        "ua3.node.check-host.net"
+    ]
+}
+
+# All nodes combined
+ALL_NODES = []
+for nodes in NODES_BY_CONTINENT.values():
+    ALL_NODES.extend(nodes)
+
+# Node details mapping with country organization
+NODE_DETAILS = {
+    # Europe (EU)
+    "bg1.node.check-host.net": {"country": "Bulgaria", "city": "Sofia", "continent": "EU"},
+    "ch1.node.check-host.net": {"country": "Switzerland", "city": "Zurich", "continent": "EU"},
+    "cz1.node.check-host.net": {"country": "Czechia", "city": "C.Budejovice", "continent": "EU"},
+    "de1.node.check-host.net": {"country": "Germany", "city": "Nuremberg", "continent": "EU"},
+    "de4.node.check-host.net": {"country": "Germany", "city": "Frankfurt", "continent": "EU"},
+    "es1.node.check-host.net": {"country": "Spain", "city": "Barcelona", "continent": "EU"},
+    "fi1.node.check-host.net": {"country": "Finland", "city": "Helsinki", "continent": "EU"},
+    "fr1.node.check-host.net": {"country": "France", "city": "Roubaix", "continent": "EU"},
+    "fr2.node.check-host.net": {"country": "France", "city": "Paris", "continent": "EU"},
+    "hu1.node.check-host.net": {"country": "Hungary", "city": "Nyiregyhaza", "continent": "EU"},
+    "it2.node.check-host.net": {"country": "Italy", "city": "Milan", "continent": "EU"},
+    "lt1.node.check-host.net": {"country": "Lithuania", "city": "Vilnius", "continent": "EU"},
+    "md1.node.check-host.net": {"country": "Moldova", "city": "Chisinau", "continent": "EU"},
+    "nl1.node.check-host.net": {"country": "Netherlands", "city": "Amsterdam", "continent": "EU"},
+    "nl2.node.check-host.net": {"country": "Netherlands", "city": "Meppel", "continent": "EU"},
+    "pl1.node.check-host.net": {"country": "Poland", "city": "Poznan", "continent": "EU"},
+    "pl2.node.check-host.net": {"country": "Poland", "city": "Warsaw", "continent": "EU"},
+    "pt1.node.check-host.net": {"country": "Portugal", "city": "Viana", "continent": "EU"},
+    "rs1.node.check-host.net": {"country": "Serbia", "city": "Belgrade", "continent": "EU"},
+    "se1.node.check-host.net": {"country": "Sweden", "city": "Tallberg", "continent": "EU"},
+    "uk1.node.check-host.net": {"country": "UK", "city": "Coventry", "continent": "EU"},
+    
+    # Asia (AS)
+    "hk1.node.check-host.net": {"country": "Hong Kong", "city": "Hong Kong", "continent": "AS"},
+    "il1.node.check-host.net": {"country": "Israel", "city": "Tel Aviv", "continent": "AS"},
+    "il2.node.check-host.net": {"country": "Israel", "city": "Netanya", "continent": "AS"},
+    "in1.node.check-host.net": {"country": "India", "city": "Mumbai", "continent": "AS"},
+    "in2.node.check-host.net": {"country": "India", "city": "Chennai", "continent": "AS"},
+    "ir1.node.check-host.net": {"country": "Iran", "city": "Tehran", "continent": "AS"},
+    "ir3.node.check-host.net": {"country": "Iran", "city": "Mashhad", "continent": "AS"},
+    "ir5.node.check-host.net": {"country": "Iran", "city": "Esfahan", "continent": "AS"},
+    "ir6.node.check-host.net": {"country": "Iran", "city": "Karaj", "continent": "AS"},
+    "jp1.node.check-host.net": {"country": "Japan", "city": "Tokyo", "continent": "AS"},
+    "kz1.node.check-host.net": {"country": "Kazakhstan", "city": "Karaganda", "continent": "AS"},
+    "tr1.node.check-host.net": {"country": "Turkey", "city": "Istanbul", "continent": "AS"},
+    "tr2.node.check-host.net": {"country": "Turkey", "city": "Gebze", "continent": "AS"},
+    "vn1.node.check-host.net": {"country": "Vietnam", "city": "Ho Chi Minh City", "continent": "AS"},
+    
+    # North America (NA)
+    "us1.node.check-host.net": {"country": "USA", "city": "Los Angeles", "continent": "NA"},
+    "us2.node.check-host.net": {"country": "USA", "city": "Dallas", "continent": "NA"},
+    "us3.node.check-host.net": {"country": "USA", "city": "Atlanta", "continent": "NA"},
+    
+    # South America (SA)
+    "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
+    
+    # Eastern Europe (EU-EAST)
+    "ru1.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
+    "ru2.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
+    "ru3.node.check-host.net": {"country": "Russia", "city": "Saint Petersburg", "continent": "EU-EAST"},
+    "ru4.node.check-host.net": {"country": "Russia", "city": "Ekaterinburg", "continent": "EU-EAST"},
+    "ua1.node.check-host.net": {"country": "Ukraine", "city": "Khmelnytskyi", "continent": "EU-EAST"},
+    "ua2.node.check-host.net": {"country": "Ukraine", "city": "Kyiv", "continent": "EU-EAST"},
+    "ua3.node.check-host.net": {"country": "Ukraine", "city": "SpaceX Starlink", "continent": "EU-EAST"}
+}
+
 import requests
 import json
 from urllib.parse import quote
@@ -70,10 +165,14 @@ def check_website_status(url):
                                     if node_result[0] is not None:
                                         if node_result[0] == 1:
                                             response_time = node_result[1] if len(node_result) > 1 else "N/A"
-                                            print_color(f"[+] {node}: Online (Tiempo de respuesta: {response_time:.3f}s)", COLOR_GREEN)
+                                            country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
+                                            city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
+                                            print_color(f"[+] {node} ({country_info}, {city_info}): Online (Tiempo de respuesta: {response_time:.3f}s)", COLOR_GREEN)
                                         else:
                                             error_msg = node_result[1] if len(node_result) > 1 else "Error desconocido"
-                                            print_color(f"[-] {node}: Offline (Error: {error_msg})", COLOR_RED)
+                                            country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
+                                            city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
+                                            print_color(f"[-] {node} ({country_info}, {city_info}): Offline (Error: {error_msg})", COLOR_RED)
                                     else:
                                         print_color(f"[?] {node}: No se pudo determinar el estado", COLOR_YELLOW)
                                 else:
@@ -115,9 +214,9 @@ def main():
     
     while True:
         # Solicitar URL al usuario
-        website = input(f"{COLOR_GREEN}Ingresa la URL a verificar (ejemplo: google.com) o 'exit' para terminar: {COLOR_RESET}").strip()
+        website = input(f"{COLOR_GREEN}Ingresa la URL a verificar (ejemplo: google.com) o 'salir' para terminar: {COLOR_RESET}").strip()
         
-        if website.lower() == 'exit':
+        if website.lower() == 'salir':
             print_color("¡Hasta luego!", COLOR_CYAN)
             break
             
