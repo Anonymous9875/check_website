@@ -167,18 +167,18 @@ def check_website_status(url):
                                             response_time = node_result[1] if len(node_result) > 1 else "N/A"
                                             country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
                                             city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
-                                            print_color(f"[+] {node} ({country_info}, {city_info}): Online (Tiempo de respuesta: {response_time:.3f}s)", COLOR_GREEN)
+                                            print_color(f"[+] ({country_info}, {city_info}): Online (Tiempo de respuesta: {response_time:.3f}s)", COLOR_GREEN)
                                         else:
                                             error_msg = node_result[1] if len(node_result) > 1 else "Error desconocido"
                                             country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
                                             city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
-                                            print_color(f"[-] {node} ({country_info}, {city_info}): Offline (Error: {error_msg})", COLOR_RED)
+                                            print_color(f"[-] ({country_info}, {city_info}): Offline (Error: {error_msg})", COLOR_RED)
                                     else:
-                                        print_color(f"[?] {node}: No se pudo determinar el estado", COLOR_YELLOW)
+                                            print_color(f"[?] ({country_info}, {city_info}): No se pudo determinar el estado", COLOR_YELLOW)
                                 else:
-                                    print_color(f"[?] {node}: Formato de respuesta inesperado", COLOR_YELLOW)
+                                            print_color(f"[?] ({country_info}, {city_info}): Formato de respuesta inesperado", COLOR_YELLOW)
                             else:
-                                print_color(f"[?] {node}: No hay datos disponibles", COLOR_YELLOW)
+                                            print_color(f"[?] ({country_info}, {city_info}): No hay datos disponibles", COLOR_YELLOW)
                     else:
                         print_color("Los resultados aún no están disponibles. Intenta nuevamente más tarde.", COLOR_YELLOW)
                 else:
