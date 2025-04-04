@@ -117,13 +117,29 @@ def print_color(text, color):
     """Imprime texto en el color especificado."""
     print(f"{color}{text}{COLOR_RESET}")
 
-def check_website_status(url):
+def perform_check(method, target):
     try:
-        # Codificar la URL para que sea segura en la solicitud
-        encoded_url = quote(url, safe='')
+        # Codificar el objetivo para que sea segura en la solicitud
+        encoded_target = quote(target, safe='')
         
-        # URL de la API de check-host.net
-        api_url = f"https://check-host.net/check-http?host={encoded_url}"
+        # URL de la API de check-host.net según el método
+        if method == "ip-lookup":
+            api_url = f"https://check-host.net/ip-info?host={encoded_target}"
+        elif method == "whois":
+            api_url = f"https://check-host.net/check-whois?host={encoded_target}"
+        elif method == "ping":
+            api_url = f"https://check-host.net/check-ping?host={encoded_target}"
+        elif method == "http":
+            api_url = f"https://check-host.net/check-http?host={encoded_target}"
+        elif method == "tcp":
+            api_url = f"https://check-host.net/check-tcp?host={encoded_target}"
+        elif method == "udp":
+            api_url = f"https://check-host.net/check-udp?host={encoded_target}"
+        elif method == "dns":
+            api_url = f"https://check-host.net/check-dns?host={encoded_target}"
+        else:
+            print_color("Método no válido", COLOR_RED)
+            return
         
         # Headers necesarios para la solicitud
         headers = {
@@ -143,7 +159,7 @@ def check_website_status(url):
                 request_id = data["request_id"]
                 nodes = data["nodes"]
                 
-                print_color(f"\nVerificando: {url}", COLOR_CYAN)
+                print_color(f"\nRealizando {method} en: {target}", COLOR_CYAN)
                 print_color("Esperando resultados de los servidores...", COLOR_YELLOW)
                 
                 # Esperar unos segundos para que los servidores completen las pruebas
@@ -157,28 +173,55 @@ def check_website_status(url):
                     results = result_response.json()
                     
                     if results:
-                        print_color(f"\nResultados para: {url}\n", COLOR_CYAN)
+                        print_color(f"\nResultados de {method} para: {target}", COLOR_CYAN)
                         for node in nodes:
                             if node in results and results[node] is not None:
-                                node_result = results[node][0]
+                                node_result = results[node]
                                 if isinstance(node_result, list):
-                                    if node_result[0] is not None:
+                                    node_result = node_result[0]  # Tomar el primer resultado si es una lista
+                                
+                                country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
+                                city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
+                                
+                                if method == "ping":
+                                    if isinstance(node_result, dict) and "error" in node_result:
+                                        print_color(f"[-] ({country_info}, {city_info}): Error - {node_result['error']}", COLOR_RED)
+                                    elif isinstance(node_result, list) and len(node_result) > 0:
+                                        ping_time = sum(node_result) / len(node_result)
+                                        print_color(f"[+] ({country_info}, {city_info}): Ping promedio: {ping_time:.2f} ms", COLOR_GREEN)
+                                elif method == "http":
+                                    if isinstance(node_result, list) and len(node_result) > 0:
                                         if node_result[0] == 1:
                                             response_time = node_result[1] if len(node_result) > 1 else "N/A"
-                                            country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
-                                            city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
                                             print_color(f"[+] ({country_info}, {city_info}): Online (Tiempo de respuesta: {response_time:.3f}s)", COLOR_GREEN)
                                         else:
                                             error_msg = node_result[1] if len(node_result) > 1 else "Error desconocido"
-                                            country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
-                                            city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
                                             print_color(f"[-] ({country_info}, {city_info}): Offline (Error: {error_msg})", COLOR_RED)
+                                elif method in ["tcp", "udp"]:
+                                    if node_result == 1:
+                                        print_color(f"[+] ({country_info}, {city_info}): Puerto accesible", COLOR_GREEN)
+                                    elif node_result == 0:
+                                        print_color(f"[-] ({country_info}, {city_info}): Puerto inaccesible", COLOR_RED)
                                     else:
-                                            print_color(f"[?] ({country_info}, {city_info}): No se pudo determinar el estado", COLOR_YELLOW)
-                                else:
-                                            print_color(f"[?] ({country_info}, {city_info}): Formato de respuesta inesperado", COLOR_YELLOW)
+                                        print_color(f"[?] ({country_info}, {city_info}): Resultado desconocido", COLOR_YELLOW)
+                                elif method == "dns":
+                                    if isinstance(node_result, list) and len(node_result) > 0:
+                                        print_color(f"[+] ({country_info}, {city_info}): Registros DNS encontrados", COLOR_GREEN)
+                                        for record in node_result:
+                                            print_color(f"    {record}", COLOR_WHITE)
+                                    else:
+                                        print_color(f"[-] ({country_info}, {city_info}): No se encontraron registros DNS", COLOR_RED)
+                                elif method in ["ip-lookup", "whois"]:
+                                    if isinstance(node_result, dict):
+                                        print_color(f"[+] ({country_info}, {city_info}): Información encontrada", COLOR_GREEN)
+                                        for key, value in node_result.items():
+                                            print_color(f"    {key}: {value}", COLOR_WHITE)
+                                    else:
+                                        print_color(f"[?] ({country_info}, {city_info}): Formato de respuesta inesperado", COLOR_YELLOW)
                             else:
-                                            print_color(f"[?] ({country_info}, {city_info}): No hay datos disponibles", COLOR_YELLOW)
+                                country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
+                                city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
+                                print_color(f"[?] ({country_info}, {city_info}): No hay datos disponibles", COLOR_YELLOW)
                     else:
                         print_color("Los resultados aún no están disponibles. Intenta nuevamente más tarde.", COLOR_YELLOW)
                 else:
@@ -208,24 +251,31 @@ def main():
         sys.stdout.reconfigure(encoding='utf-8')
 
     clear_screen()
-    print_color("Herramienta para verificar si una página web está caída", COLOR_BOLD + COLOR_CYAN)
-    print_color("Utilizando check-host.net", COLOR_YELLOW)
+    print_color("Herramienta para verificar hosts usando check-host.net", COLOR_BOLD + COLOR_CYAN)
+    print_color("Métodos disponibles: ip-lookup, whois, ping, http, tcp, udp, dns", COLOR_YELLOW)
     print_color("----------------------------------------", COLOR_WHITE)
     
     while True:
-        # Solicitar URL al usuario
-        website = input(f"{COLOR_GREEN}Ingresa la URL a verificar (ejemplo: google.com) o 'salir' para terminar: {COLOR_RESET}").strip()
+        # Solicitar método al usuario
+        method = input(f"{COLOR_GREEN}Selecciona el método (ip-lookup, whois, ping, http, tcp, udp, dns) o 'salir' para terminar: {COLOR_RESET}").strip().lower()
         
-        if website.lower() == 'salir':
+        if method == 'salir':
             print_color("¡Hasta luego!", COLOR_CYAN)
             break
             
-        # Asegurarse de que la URL tenga el protocolo
-        if not website.startswith(('http://', 'https://')):
-            website = 'https://' + website
+        if method not in ['ip-lookup', 'whois', 'ping', 'http', 'tcp', 'udp', 'dns']:
+            print_color("Método no válido. Por favor selecciona uno de los métodos disponibles.", COLOR_RED)
+            continue
             
-        # Verificar el estado del sitio
-        check_website_status(website)
+        # Solicitar objetivo al usuario
+        target = input(f"{COLOR_GREEN}Ingresa el objetivo (URL, IP o dominio) a verificar: {COLOR_RESET}").strip()
+        
+        if not target:
+            print_color("Debes ingresar un objetivo válido.", COLOR_RED)
+            continue
+            
+        # Realizar la verificación
+        perform_check(method, target)
         
         print_color("\n----------------------------------------", COLOR_WHITE)
 
