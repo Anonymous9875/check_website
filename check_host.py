@@ -123,10 +123,8 @@ def perform_check(method, target):
         encoded_target = quote(target, safe='')
         
         # URL de la API de check-host.net según el método
-        if method == "ip-lookup":
+        if method == "ip-info":
             api_url = f"https://check-host.net/ip-info?host={encoded_target}"
-        elif method == "whois":
-            api_url = f"https://check-host.net/check-whois?host={encoded_target}"
         elif method == "ping":
             api_url = f"https://check-host.net/check-ping?host={encoded_target}"
         elif method == "http":
@@ -211,7 +209,7 @@ def perform_check(method, target):
                                             print_color(f"    {record}", COLOR_WHITE)
                                     else:
                                         print_color(f"[-] ({country_info}, {city_info}): No se encontraron registros DNS", COLOR_RED)
-                                elif method in ["ip-lookup", "whois"]:
+                                elif method == "ip-info":
                                     if isinstance(node_result, dict):
                                         print_color(f"[+] ({country_info}, {city_info}): Información encontrada", COLOR_GREEN)
                                         for key, value in node_result.items():
@@ -252,18 +250,18 @@ def main():
 
     clear_screen()
     print_color("Herramienta para verificar hosts usando check-host.net", COLOR_BOLD + COLOR_CYAN)
-    print_color("Métodos disponibles: ip-lookup, whois, ping, http, tcp, udp, dns", COLOR_YELLOW)
+    print_color("Métodos disponibles: ip-info, ping, http, tcp, udp, dns", COLOR_YELLOW)
     print_color("----------------------------------------", COLOR_WHITE)
     
     while True:
         # Solicitar método al usuario
-        method = input(f"{COLOR_GREEN}Selecciona el método (ip-lookup, whois, ping, http, tcp, udp, dns) o 'salir' para terminar: {COLOR_RESET}").strip().lower()
+        method = input(f"{COLOR_GREEN}Selecciona el método (ip-info, ping, http, tcp, udp, dns) o 'exit' para terminar: {COLOR_RESET}").strip().lower()
         
-        if method == 'salir':
+        if method == 'exit':
             print_color("¡Hasta luego!", COLOR_CYAN)
             break
             
-        if method not in ['ip-lookup', 'whois', 'ping', 'http', 'tcp', 'udp', 'dns']:
+        if method not in ['ip-info', 'ping', 'http', 'tcp', 'udp', 'dns']:
             print_color("Método no válido. Por favor selecciona uno de los métodos disponibles.", COLOR_RED)
             continue
             
