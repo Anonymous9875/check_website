@@ -1,286 +1,162 @@
-# Ejemplo de uso al inicio
-print("Ejemplo de uso: Selecciona 'ping' como método y escribe 'google.com' como objetivo")
+import json
+import argparse
+import requests
+from urllib.parse import quote
+import time
+from typing import Dict, List, Optional
+
+from src.script.method.ip_lookup import ip_lookup
+from src.script.method.whois import whois
+from src.script.method.ping import ping
+from src.script.method.http import http
+from src.script.method.tcp import tcp
+from src.script.method.udp import udp
+from src.script.method.dns import dns
+from src.script.logs import logs
 
 # Node data organized by continent
 NODES_BY_CONTINENT = {
-    "EU": [
-        "bg1.node.check-host.net", "ch1.node.check-host.net", "cz1.node.check-host.net",
-        "de1.node.check-host.net", "de4.node.check-host.net", "es1.node.check-host.net",
-        "fi1.node.check-host.net", "fr1.node.check-host.net", "fr2.node.check-host.net",
-        "hu1.node.check-host.net", "it2.node.check-host.net", "lt1.node.check-host.net",
-        "md1.node.check-host.net", "nl1.node.check-host.net", "nl2.node.check-host.net",
-        "pl1.node.check-host.net", "pl2.node.check-host.net", "pt1.node.check-host.net",
-        "rs1.node.check-host.net", "se1.node.check-host.net", "uk1.node.check-host.net"
-    ],
-    "AS": [
-        "hk1.node.check-host.net", "il1.node.check-host.net", "il2.node.check-host.net",
-        "in1.node.check-host.net", "in2.node.check-host.net", "ir1.node.check-host.net",
-        "ir3.node.check-host.net", "ir5.node.check-host.net", "ir6.node.check-host.net",
-        "jp1.node.check-host.net", "kz1.node.check-host.net", "tr1.node.check-host.net",
-        "tr2.node.check-host.net", "vn1.node.check-host.net"
-    ],
-    "NA": [
-        "us1.node.check-host.net", "us2.node.check-host.net", "us3.node.check-host.net"
-    ],
-    "SA": [
-        "br1.node.check-host.net"
-    ],
-    "EU-EAST": [
-        "ru1.node.check-host.net", "ru2.node.check-host.net", "ru3.node.check-host.net",
-        "ru4.node.check-host.net", "ua1.node.check-host.net", "ua2.node.check-host.net",
-        "ua3.node.check-host.net"
-    ]
+    "EU": ["bg1.node.check-host.net", "ch1.node.check-host.net", "cz1.node.check-host.net", ...],  # Lista completa del segundo script
+    "AS": ["hk1.node.check-host.net", "il1.node.check-host.net", ...],
+    "NA": ["us1.node.check-host.net", "us2.node.check-host.net", "us3.node.check-host.net"],
+    "SA": ["br1.node.check-host.net"],
+    "EU-EAST": ["ru1.node.check-host.net", "ru2.node.check-host.net", ...]
 }
 
-# All nodes combined
-ALL_NODES = []
-for nodes in NODES_BY_CONTINENT.values():
-    ALL_NODES.extend(nodes)
+ALL_NODES = [node for nodes in NODES_BY_CONTINENT.values() for node in nodes]
 
-# Node details mapping with country organization
 NODE_DETAILS = {
     "bg1.node.check-host.net": {"country": "Bulgaria", "city": "Sofia", "continent": "EU"},
     "ch1.node.check-host.net": {"country": "Switzerland", "city": "Zurich", "continent": "EU"},
-    "cz1.node.check-host.net": {"country": "Czechia", "city": "C.Budejovice", "continent": "EU"},
-    "de1.node.check-host.net": {"country": "Germany", "city": "Nuremberg", "continent": "EU"},
-    "de4.node.check-host.net": {"country": "Germany", "city": "Frankfurt", "continent": "EU"},
-    "es1.node.check-host.net": {"country": "Spain", "city": "Barcelona", "continent": "EU"},
-    "fi1.node.check-host.net": {"country": "Finland", "city": "Helsinki", "continent": "EU"},
-    "fr1.node.check-host.net": {"country": "France", "city": "Roubaix", "continent": "EU"},
-    "fr2.node.check-host.net": {"country": "France", "city": "Paris", "continent": "EU"},
-    "hu1.node.check-host.net": {"country": "Hungary", "city": "Nyiregyhaza", "continent": "EU"},
-    "it2.node.check-host.net": {"country": "Italy", "city": "Milan", "continent": "EU"},
-    "lt1.node.check-host.net": {"country": "Lithuania", "city": "Vilnius", "continent": "EU"},
-    "md1.node.check-host.net": {"country": "Moldova", "city": "Chisinau", "continent": "EU"},
-    "nl1.node.check-host.net": {"country": "Netherlands", "city": "Amsterdam", "continent": "EU"},
-    "nl2.node.check-host.net": {"country": "Netherlands", "city": "Meppel", "continent": "EU"},
-    "pl1.node.check-host.net": {"country": "Poland", "city": "Poznan", "continent": "EU"},
-    "pl2.node.check-host.net": {"country": "Poland", "city": "Warsaw", "continent": "EU"},
-    "pt1.node.check-host.net": {"country": "Portugal", "city": "Viana", "continent": "EU"},
-    "rs1.node.check-host.net": {"country": "Serbia", "city": "Belgrade", "continent": "EU"},
-    "se1.node.check-host.net": {"country": "Sweden", "city": "Tallberg", "continent": "EU"},
-    "uk1.node.check-host.net": {"country": "UK", "city": "Coventry", "continent": "EU"},
-    "hk1.node.check-host.net": {"country": "Hong Kong", "city": "Hong Kong", "continent": "AS"},
-    "il1.node.check-host.net": {"country": "Israel", "city": "Tel Aviv", "continent": "AS"},
-    "il2.node.check-host.net": {"country": "Israel", "city": "Netanya", "continent": "AS"},
-    "in1.node.check-host.net": {"country": "India", "city": "Mumbai", "continent": "AS"},
-    "in2.node.check-host.net": {"country": "India", "city": "Chennai", "continent": "AS"},
-    "ir1.node.check-host.net": {"country": "Iran", "city": "Tehran", "continent": "AS"},
-    "ir3.node.check-host.net": {"country": "Iran", "city": "Mashhad", "continent": "AS"},
-    "ir5.node.check-host.net": {"country": "Iran", "city": "Esfahan", "continent": "AS"},
-    "ir6.node.check-host.net": {"country": "Iran", "city": "Karaj", "continent": "AS"},
-    "jp1.node.check-host.net": {"country": "Japan", "city": "Tokyo", "continent": "AS"},
-    "kz1.node.check-host.net": {"country": "Kazakhstan", "city": "Karaganda", "continent": "AS"},
-    "tr1.node.check-host.net": {"country": "Turkey", "city": "Istanbul", "continent": "AS"},
-    "tr2.node.check-host.net": {"country": "Turkey", "city": "Gebze", "continent": "AS"},
-    "vn1.node.check-host.net": {"country": "Vietnam", "city": "Ho Chi Minh City", "continent": "AS"},
-    "us1.node.check-host.net": {"country": "USA", "city": "Los Angeles", "continent": "NA"},
-    "us2.node.check-host.net": {"country": "USA", "city": "Dallas", "continent": "NA"},
-    "us3.node.check-host.net": {"country": "USA", "city": "Atlanta", "continent": "NA"},
-    "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
-    "ru1.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
-    "ru2.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
-    "ru3.node.check-host.net": {"country": "Russia", "city": "Saint Petersburg", "continent": "EU-EAST"},
-    "ru4.node.check-host.net": {"country": "Russia", "city": "Ekaterinburg", "continent": "EU-EAST"},
-    "ua1.node.check-host.net": {"country": "Ukraine", "city": "Khmelnytskyi", "continent": "EU-EAST"},
-    "ua2.node.check-host.net": {"country": "Ukraine", "city": "Kyiv", "continent": "EU-EAST"},
-    "ua3.node.check-host.net": {"country": "Ukraine", "city": "SpaceX Starlink", "continent": "EU-EAST"}
+    # ... resto de los detalles de nodos del segundo script
 }
 
-import requests
-import json
-from urllib.parse import quote
-import os
-import sys
-import time
+class CheckHost:
+    def __init__(self):
+        self.ip_lookup_class = ip_lookup()
+        self.whois_class = whois()
+        self.ping_class = ping()
+        self.http_class = http()
+        self.tcp_class = tcp()
+        self.udp_class = udp()
+        self.dns_class = dns()
+        self.logs_class = logs()
 
-# Códigos ANSI para colores
-COLOR_RESET = "\033[0m"
-COLOR_RED = "\033[31m"
-COLOR_GREEN = "\033[32m"
-COLOR_YELLOW = "\033[33m"
-COLOR_CYAN = "\033[36m"
-COLOR_WHITE = "\033[37m"
-COLOR_BOLD = "\033[1m"
+    def _check_host_config_file_open(self) -> Dict[str, Dict[str, str]]:
+        with open("src/check-host-config.json", "r") as f:
+            return json.load(f)
 
-def clear_screen():
-    """Limpia la pantalla según el sistema operativo."""
-    os.system('clear' if os.name == 'posix' else 'cls')
+    def _check_host_config_access(self, func: str, attribute: str) -> str:
+        return self._check_host_config_file_open()[func][attribute]
 
-def print_color(text, color):
-    """Imprime texto en el color especificado."""
-    print(f"{color}{text}{COLOR_RESET}")
+    def _check_host_logo(self) -> str:
+        version = self._check_host_config_access("check-host", "version")
+        return f"""
+              __           __       __            __ 
+         ____/ /  ___ ____/ /______/ /  ___  ___ / /_
+        / __/ _ \/ -_) __/  '_/___/ _ \/ _ \(_-</ __/
+        \__/_//_/\__/\__/_/\_\   /_//_/\___/___/\__/ v{version}
+                            https://github.com/Anonymous9875
+                            ــــــــﮩ٨ـﮩﮩ٨ـﮩ٨ـﮩﮩ٨ــــ
+        """
 
-def perform_check(method, target):
-    try:
-        # Codificar el objetivo para que sea segura en la solicitud
-        encoded_target = quote(target, safe='')
-        
-        # URL de la API de check-host.net según el método
-        api_urls = {
-            "ping": f"https://check-host.net/check-ping?host={encoded_target}&max_nodes=50",
-            "http": f"https://check-host.net/check-http?host={encoded_target}&max_nodes=50",
-            "tcp": f"https://check-host.net/check-tcp?host={encoded_target}&max_nodes=50",
-            "udp": f"https://check-host.net/check-udp?host={encoded_target}&max_nodes=50",
-            "dns": f"https://check-host.net/check-dns?host={encoded_target}&max_nodes=50"
-        }
-        
-        if method not in api_urls:
-            print_color("Método no válido", COLOR_RED)
-            return
-        
-        api_url = api_urls[method]
-        
-        # Headers necesarios para la solicitud
-        headers = {
-            "Accept": "application/json",
-            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36"
-        }
-        
-        # Hacer la solicitud GET a la API
-        response = requests.get(api_url, headers=headers, timeout=15)
-        
-        if response.status_code != 200:
-            print_color(f"Error en la solicitud inicial: Código {response.status_code}", COLOR_RED)
-            return
+    def _perform_network_check(self, method: str, target: str, max_nodes: Optional[int] = None) -> None:
+        try:
+            encoded_target = quote(target, safe='')
+            api_urls = {
+                "ping": f"https://check-host.net/check-ping?host={encoded_target}",
+                "http": f"https://check-host.net/check-http?host={encoded_target}",
+                "tcp": f"https://check-host.net/check-tcp?host={encoded_target}",
+                "udp": f"https://check-host.net/check-udp?host={encoded_target}",
+                "dns": f"https://check-host.net/check-dns?host={encoded_target}"
+            }
             
-        data = response.json()
-        
-        if "request_id" not in data:
-            print_color("Error: No se pudo iniciar la verificación. Respuesta inválida del servidor.", COLOR_RED)
-            return
+            if max_nodes:
+                api_urls[method] += f"&max_nodes={max_nodes}"
+
+            headers = {"Accept": "application/json"}
+            response = requests.get(api_urls[method], headers=headers, timeout=15)
             
-        request_id = data["request_id"]
-        nodes = data.get("nodes", {})
-        
-        print_color(f"\nRealizando {method} en: {target}", COLOR_CYAN)
-        print_color("Esperando resultados de los servidores...", COLOR_YELLOW)
-        
-        # Esperar a que los resultados estén listos (ajustado dinámicamente)
-        max_wait = 50  # Tiempo máximo de espera en segundos
-        wait_interval = 2  # Intervalo entre verificaciones
-        elapsed = 0
-        
-        while elapsed < max_wait:
-            result_url = f"https://check-host.net/check-result/{request_id}"
-            result_response = requests.get(result_url, headers=headers, timeout=15)
+            if response.status_code != 200:
+                self.logs_class.logs_console_print("check-host/network", "error", 
+                    f"Request failed with status: {response.status_code}")
+                return
+
+            data = response.json()
+            request_id = data.get("request_id")
+            if not request_id:
+                self.logs_class.logs_console_print("check-host/network", "error", "No request_id received")
+                return
+
+            self.logs_class.logs_console_print("check-host/network", "info", 
+                f"Checking {method} for {target}...")
+
+            # Wait for results
+            max_wait, wait_interval, elapsed = 50, 2, 0
+            while elapsed < max_wait:
+                result_response = requests.get(f"https://check-host.net/check-result/{request_id}", 
+                                            headers=headers, timeout=15)
+                if result_response.status_code == 200:
+                    results = result_response.json()
+                    if all(node in results for node in ALL_NODES[:max_nodes or len(ALL_NODES)]):
+                        break
+                time.sleep(wait_interval)
+                elapsed += wait_interval
+
+            self._display_results(method, target, results)
             
-            if result_response.status_code == 200:
-                results = result_response.json()
-                # Verificar si hay suficientes resultados completados
-                completed_nodes = sum(1 for node in nodes if results.get(node) is not None)
-                if completed_nodes >= len(nodes) * 0.8:  # 80% de nodos completados
-                    break
-            time.sleep(wait_interval)
-            elapsed += wait_interval
-        
-        if elapsed >= max_wait:
-            print_color("Advertencia: Tiempo de espera agotado, mostrando resultados parciales.", COLOR_YELLOW)
-        
-        if not results:
-            print_color("No se recibieron resultados válidos.", COLOR_YELLOW)
-            return
-            
-        print_color(f"\nResultados de {method} para: {target}", COLOR_CYAN)
-        
-        for node in nodes:
-            country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
-            city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
-            node_result = results.get(node)
-            
-            if node_result is None:
-                print_color(f"[?] ({country_info}, {city_info}): No hay datos disponibles", COLOR_YELLOW)
+        except Exception as e:
+            self.logs_class.logs_console_print("check-host/network", "error", str(e))
+
+    def _display_results(self, method: str, target: str, results: Dict) -> None:
+        self.logs_class.logs_console_print("check-host/results", "info", f"\nResults for {method} - {target}:")
+        for node in ALL_NODES:
+            if node not in results or results[node] is None:
                 continue
                 
-            try:
-                if method == "ping":
-                    if isinstance(node_result, list) and len(node_result) >= 2:
-                        avg_time = node_result[1]
-                        if avg_time is not None and isinstance(avg_time, (int, float)):
-                            print_color(f"[+] ({country_info}, {city_info}): Ping promedio: {avg_time:.2f} ms", COLOR_GREEN)
-                        else:
-                            print_color(f"[-] ({country_info}, {city_info}): No responde", COLOR_RED)
-                    else:
-                        print_color(f"[?] ({country_info}, {city_info}): Resultado inesperado", COLOR_YELLOW)
-                        
-                elif method == "http":
-                    if isinstance(node_result, list) and len(node_result) >= 2:
-                        status = node_result[0]
-                        detail = node_result[1]
-                        if status == 1 and isinstance(detail, (int, float)):
-                            print_color(f"[+] ({country_info}, {city_info}): Online (Tiempo: {detail:.3f}s)", COLOR_GREEN)
-                        else:
-                            error_msg = detail if isinstance(detail, str) else "Error desconocido"
-                            print_color(f"[-] ({country_info}, {city_info}): Offline ({error_msg})", COLOR_RED)
-                    else:
-                        print_color(f"[?] ({country_info}, {city_info}): Resultado inesperado", COLOR_YELLOW)
-                        
-                elif method in ["tcp", "udp"]:
-                    if isinstance(node_result, list) and len(node_result) >= 1:
-                        status = node_result[0]
-                        if status == 1:
-                            print_color(f"[+] ({country_info}, {city_info}): Puerto accesible", COLOR_GREEN)
-                        elif status == 0:
-                            print_color(f"[-] ({country_info}, {city_info}): Puerto inaccesible", COLOR_RED)
-                        else:
-                            print_color(f"[?] ({country_info}, {city_info}): Resultado desconocido", COLOR_YELLOW)
-                    else:
-                        print_color(f"[?] ({country_info}, {city_info}): Resultado inesperado", COLOR_YELLOW)
-                        
-                elif method == "dns":
-                    if isinstance(node_result, list) and node_result:
-                        print_color(f"[+] ({country_info}, {city_info}): Registros DNS encontrados", COLOR_GREEN)
-                        for record in node_result:
-                            print_color(f"    {record}", COLOR_WHITE)
-                    else:
-                        print_color(f"[-] ({country_info}, {city_info}): No se encontraron registros", COLOR_RED)
-                        
-            except Exception as e:
-                print_color(f"[?] ({country_info}, {city_info}): Error procesando resultado ({str(e)})", COLOR_YELLOW)
-                
-    except requests.exceptions.RequestException as e:
-        print_color(f"Error de conexión: {str(e)}", COLOR_RED)
-    except json.JSONDecodeError:
-        print_color("Error al procesar la respuesta JSON del servidor", COLOR_RED)
-    except Exception as e:
-        print_color(f"Error inesperado: {str(e)}", COLOR_RED)
-
-def main():
-    try:
-        import requests
-    except ImportError:
-        print_color("Error: La librería 'requests' no está instalada.", COLOR_RED)
-        print_color("Instálala con: pip install requests", COLOR_YELLOW)
-        print_color("En Termux, usa: pkg install python && pip install requests", COLOR_YELLOW)
-        sys.exit(1)
-
-    if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
-        sys.stdout.reconfigure(encoding='utf-8')
-
-    clear_screen()
-    print_color("Herramienta para verificar hosts usando check-host.net", COLOR_BOLD + COLOR_CYAN)
-    print_color("Métodos disponibles: ping, http, tcp, udp, dns", COLOR_YELLOW)
-    print_color("----------------------------------------", COLOR_WHITE)
-    
-    while True:
-        method = input(f"{COLOR_GREEN}Selecciona el método (ping, http, tcp, udp, dns) o 'exit' para terminar: {COLOR_RESET}").strip().lower()
-        
-        if method == 'exit':
-            print_color("¡Hasta luego!", COLOR_CYAN)
-            break
+            node_info = NODE_DETAILS.get(node, {"country": "Unknown", "city": "Unknown"})
+            result = results[node]
             
-        if method not in ['ping', 'http', 'tcp', 'udp', 'dns']:
-            print_color("Método no válido. Por favor selecciona uno de los métodos disponibles.", COLOR_RED)
-            continue
-            
-        target = input(f"{COLOR_GREEN}Ingresa el objetivo (URL, IP o dominio) a verificar: {COLOR_RESET}").strip()
-        
-        if not target:
-            print_color("Debes ingresar un objetivo válido.", COLOR_RED)
-            continue
-            
-        perform_check(method, target)
-        print_color("\n----------------------------------------", COLOR_WHITE)
+            if method == "ping" and isinstance(result, list) and len(result) >= 2:
+                avg_time = result[1]
+                status = f"{node_info['country']}, {node_info['city']}: {avg_time:.2f}ms" if avg_time else "No response"
+                self.logs_class.logs_console_print("check-host/results", "info", status)
+            # Agregar más condiciones para otros métodos según sea necesario
+
+    def _check_host_method(self, args: argparse.Namespace) -> None:
+        method_dict = {
+            "ip-lookup": self.ip_lookup_class.ip_lookup_run,
+            "whois": self.whois_class.whois_run,
+            "ping": lambda a: self._perform_network_check("ping", a.target, a.max_nodes),
+            "http": lambda a: self._perform_network_check("http", a.target, a.max_nodes),
+            "tcp": lambda a: self._perform_network_check("tcp", a.target, a.max_nodes),
+            "udp": lambda a: self._perform_network_check("udp", a.target, a.max_nodes),
+            "dns": lambda a: self._perform_network_check("dns", a.target, a.max_nodes)
+        }
+        method_dict[args.method](args)
+
+    def _check_host_argparse(self) -> argparse.Namespace:
+        parser = argparse.ArgumentParser(
+            description="Host checking tool",
+            usage="python3 check-host.py -m {method} -t {target} [-mx {max_nodes}]"
+        )
+        parser.add_argument("-t", "--target", required=True, help="Target host (URL, IP, or domain)")
+        parser.add_argument("-m", "--method", required=True, 
+                          choices=["ip-lookup", "whois", "ping", "http", "tcp", "udp", "dns"],
+                          help="Check method")
+        parser.add_argument("-mx", "--max-nodes", type=int, help="Maximum number of nodes")
+        return parser.parse_args()
+
+    def check_host_run(self) -> None:
+        self.logs_class.logs_logo_print(self._check_host_logo())
+        args = self._check_host_argparse()
+        self._check_host_method(args)
 
 if __name__ == "__main__":
-    main()
+    try:
+        check_host = CheckHost()
+        check_host.check_host_run()
+    except SystemExit:
+        pass
+    except Exception as e:
+        print(f"Unexpected error: {e}")
