@@ -36,7 +36,6 @@ for nodes in NODES_BY_CONTINENT.values():
 
 # Node details mapping with country organization
 NODE_DETAILS = {
-    # Europe (EU)
     "bg1.node.check-host.net": {"country": "Bulgaria", "city": "Sofia", "continent": "EU"},
     "ch1.node.check-host.net": {"country": "Switzerland", "city": "Zurich", "continent": "EU"},
     "cz1.node.check-host.net": {"country": "Czechia", "city": "C.Budejovice", "continent": "EU"},
@@ -58,8 +57,6 @@ NODE_DETAILS = {
     "rs1.node.check-host.net": {"country": "Serbia", "city": "Belgrade", "continent": "EU"},
     "se1.node.check-host.net": {"country": "Sweden", "city": "Tallberg", "continent": "EU"},
     "uk1.node.check-host.net": {"country": "UK", "city": "Coventry", "continent": "EU"},
-    
-    # Asia (AS)
     "hk1.node.check-host.net": {"country": "Hong Kong", "city": "Hong Kong", "continent": "AS"},
     "il1.node.check-host.net": {"country": "Israel", "city": "Tel Aviv", "continent": "AS"},
     "il2.node.check-host.net": {"country": "Israel", "city": "Netanya", "continent": "AS"},
@@ -74,16 +71,10 @@ NODE_DETAILS = {
     "tr1.node.check-host.net": {"country": "Turkey", "city": "Istanbul", "continent": "AS"},
     "tr2.node.check-host.net": {"country": "Turkey", "city": "Gebze", "continent": "AS"},
     "vn1.node.check-host.net": {"country": "Vietnam", "city": "Ho Chi Minh City", "continent": "AS"},
-    
-    # North America (NA)
     "us1.node.check-host.net": {"country": "USA", "city": "Los Angeles", "continent": "NA"},
     "us2.node.check-host.net": {"country": "USA", "city": "Dallas", "continent": "NA"},
     "us3.node.check-host.net": {"country": "USA", "city": "Atlanta", "continent": "NA"},
-    
-    # South America (SA)
     "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
-    
-    # Eastern Europe (EU-EAST)
     "ru1.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
     "ru2.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
     "ru3.node.check-host.net": {"country": "Russia", "city": "Saint Petersburg", "continent": "EU-EAST"},
@@ -123,21 +114,20 @@ def perform_check(method, target):
         encoded_target = quote(target, safe='')
         
         # URL de la API de check-host.net según el método
-        if method == "ip-info":
-            api_url = f"https://check-host.net/ip-info?host={encoded_target}"
-        elif method == "ping":
-            api_url = f"https://check-host.net/check-ping?host={encoded_target}"
-        elif method == "http":
-            api_url = f"https://check-host.net/check-http?host={encoded_target}"
-        elif method == "tcp":
-            api_url = f"https://check-host.net/check-tcp?host={encoded_target}"
-        elif method == "udp":
-            api_url = f"https://check-host.net/check-udp?host={encoded_target}"
-        elif method == "dns":
-            api_url = f"https://check-host.net/check-dns?host={encoded_target}"
-        else:
+        api_urls = {
+            "ip-info": f"https://check-host.net/ip-info?host={encoded_target}",
+            "ping": f"https://check-host.net/check-ping?host={encoded_target}",
+            "http": f"https://check-host.net/check-http?host={encoded_target}",
+            "tcp": f"https://check-host.net/check-tcp?host={encoded_target}",
+            "udp": f"https://check-host.net/check-udp?host={encoded_target}",
+            "dns": f"https://check-host.net/check-dns?host={encoded_target}"
+        }
+        
+        if method not in api_urls:
             print_color("Método no válido", COLOR_RED)
             return
+        
+        api_url = api_urls[method]
         
         # Headers necesarios para la solicitud
         headers = {
@@ -148,94 +138,112 @@ def perform_check(method, target):
         # Hacer la solicitud GET a la API
         response = requests.get(api_url, headers=headers, timeout=10)
         
-        # Verificar si la solicitud fue exitosa
-        if response.status_code == 200:
-            data = response.json()
+        if response.status_code != 200:
+            print_color(f"Error en la solicitud inicial: Código {response.status_code}", COLOR_RED)
+            return
             
-            # Procesar la respuesta inicial para obtener el request_id
-            if "request_id" in data:
-                request_id = data["request_id"]
-                nodes = data["nodes"]
+        data = response.json()
+        
+        if "request_id" not in data:
+            print_color("Error: No se pudo iniciar la verificación. Respuesta inválida del servidor.", COLOR_RED)
+            return
+            
+        request_id = data["request_id"]
+        nodes = data.get("nodes", {})
+        
+        print_color(f"\nRealizando {method} en: {target}", COLOR_CYAN)
+        print_color("Esperando resultados de los servidores...", COLOR_YELLOW)
+        
+        # Esperar a que los resultados estén listos (aumentado a 10 segundos para mayor fiabilidad)
+        time.sleep(10)
+        
+        # Obtener resultados
+        result_url = f"https://check-host.net/check-result/{request_id}"
+        result_response = requests.get(result_url, headers=headers, timeout=15)
+        
+        if result_response.status_code != 200:
+            print_color(f"Error al obtener resultados: Código {result_response.status_code}", COLOR_RED)
+            return
+            
+        results = result_response.json()
+        
+        if not results:
+            print_color("No se recibieron resultados válidos.", COLOR_YELLOW)
+            return
+            
+        print_color(f"\nResultados de {method} para: {target}", COLOR_CYAN)
+        
+        for node in nodes:
+            country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
+            city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
+            node_result = results.get(node)
+            
+            if node_result is None:
+                print_color(f"[?] ({country_info}, {city_info}): No hay datos disponibles", COLOR_YELLOW)
+                continue
                 
-                print_color(f"\nRealizando {method} en: {target}", COLOR_CYAN)
-                print_color("Esperando resultados de los servidores...", COLOR_YELLOW)
-                
-                # Esperar unos segundos para que los servidores completen las pruebas
-                time.sleep(5)
-                
-                # Hacer una segunda solicitud para obtener los resultados
-                result_url = f"https://check-host.net/check-result/{request_id}"
-                result_response = requests.get(result_url, headers=headers, timeout=15)
-                
-                if result_response.status_code == 200:
-                    results = result_response.json()
-                    
-                    if results:
-                        print_color(f"\nResultados de {method} para: {target}", COLOR_CYAN)
-                        for node in nodes:
-                            if node in results and results[node] is not None:
-                                node_result = results[node]
-                                if isinstance(node_result, list):
-                                    node_result = node_result[0]  # Tomar el primer resultado si es una lista
-                                
-                                country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
-                                city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
-                                
-                                if method == "ping":
-                                    if isinstance(node_result, dict) and "error" in node_result:
-                                        print_color(f"[-] ({country_info}, {city_info}): Error - {node_result['error']}", COLOR_RED)
-                                    elif isinstance(node_result, list) and len(node_result) > 0:
-                                        ping_time = sum(node_result) / len(node_result)
-                                        print_color(f"[+] ({country_info}, {city_info}): Ping promedio: {ping_time:.2f} ms", COLOR_GREEN)
-                                elif method == "http":
-                                    if isinstance(node_result, list) and len(node_result) > 0:
-                                        if node_result[0] == 1:
-                                            response_time = node_result[1] if len(node_result) > 1 else "N/A"
-                                            print_color(f"[+] ({country_info}, {city_info}): Online (Tiempo de respuesta: {response_time:.3f}s)", COLOR_GREEN)
-                                        else:
-                                            error_msg = node_result[1] if len(node_result) > 1 else "Error desconocido"
-                                            print_color(f"[-] ({country_info}, {city_info}): Offline (Error: {error_msg})", COLOR_RED)
-                                elif method in ["tcp", "udp"]:
-                                    if node_result == 1:
-                                        print_color(f"[+] ({country_info}, {city_info}): Puerto accesible", COLOR_GREEN)
-                                    elif node_result == 0:
-                                        print_color(f"[-] ({country_info}, {city_info}): Puerto inaccesible", COLOR_RED)
-                                    else:
-                                        print_color(f"[?] ({country_info}, {city_info}): Resultado desconocido", COLOR_YELLOW)
-                                elif method == "dns":
-                                    if isinstance(node_result, list) and len(node_result) > 0:
-                                        print_color(f"[+] ({country_info}, {city_info}): Registros DNS encontrados", COLOR_GREEN)
-                                        for record in node_result:
-                                            print_color(f"    {record}", COLOR_WHITE)
-                                    else:
-                                        print_color(f"[-] ({country_info}, {city_info}): No se encontraron registros DNS", COLOR_RED)
-                                elif method == "ip-info":
-                                    if isinstance(node_result, dict):
-                                        print_color(f"[+] ({country_info}, {city_info}): Información encontrada", COLOR_GREEN)
-                                        for key, value in node_result.items():
-                                            print_color(f"    {key}: {value}", COLOR_WHITE)
-                                    else:
-                                        print_color(f"[?] ({country_info}, {city_info}): Formato de respuesta inesperado", COLOR_YELLOW)
-                            else:
-                                country_info = NODE_DETAILS.get(node, {}).get("country", "Unknown")
-                                city_info = NODE_DETAILS.get(node, {}).get("city", "Unknown")
-                                print_color(f"[?] ({country_info}, {city_info}): No hay datos disponibles", COLOR_YELLOW)
+            try:
+                if method == "ping":
+                    if isinstance(node_result, list) and len(node_result) == 4:
+                        avg_time = node_result[1]
+                        if avg_time is not None:
+                            print_color(f"[+] ({country_info}, {city_info}): Ping promedio: {avg_time:.2f} ms", COLOR_GREEN)
+                        else:
+                            print_color(f"[-] ({country_info}, {city_info}): No responde", COLOR_RED)
                     else:
-                        print_color("Los resultados aún no están disponibles. Intenta nuevamente más tarde.", COLOR_YELLOW)
-                else:
-                    print_color(f"Error al obtener resultados: Código {result_response.status_code}", COLOR_RED)
-            else:
-                print_color("Error: No se pudo iniciar la verificación. La respuesta del servidor no contiene request_id.", COLOR_RED)
-        else:
-            print_color(f"Error en la solicitud: Código {response.status_code}", COLOR_RED)
-            
+                        print_color(f"[-] ({country_info}, {city_info}): Error en el resultado", COLOR_RED)
+                        
+                elif method == "http":
+                    if isinstance(node_result, list) and len(node_result) >= 2:
+                        status = node_result[0]
+                        detail = node_result[1]
+                        if status == 1 and isinstance(detail, float):
+                            print_color(f"[+] ({country_info}, {city_info}): Online (Tiempo: {detail:.3f}s)", COLOR_GREEN)
+                        else:
+                            error_msg = detail if isinstance(detail, str) else "Error desconocido"
+                            print_color(f"[-] ({country_info}, {city_info}): Offline ({error_msg})", COLOR_RED)
+                    else:
+                        print_color(f"[?] ({country_info}, {city_info}): Resultado inesperado", COLOR_YELLOW)
+                        
+                elif method in ["tcp", "udp"]:
+                    if isinstance(node_result, list) and len(node_result) >= 1:
+                        status = node_result[0]
+                        if status == 1:
+                            print_color(f"[+] ({country_info}, {city_info}): Puerto accesible", COLOR_GREEN)
+                        elif status == 0:
+                            print_color(f"[-] ({country_info}, {city_info}): Puerto inaccesible", COLOR_RED)
+                        else:
+                            print_color(f"[?] ({country_info}, {city_info}): Resultado desconocido", COLOR_YELLOW)
+                    else:
+                        print_color(f"[?] ({country_info}, {city_info}): Resultado inesperado", COLOR_YELLOW)
+                        
+                elif method == "dns":
+                    if isinstance(node_result, list) and node_result:
+                        print_color(f"[+] ({country_info}, {city_info}): Registros DNS encontrados", COLOR_GREEN)
+                        for record in node_result:
+                            print_color(f"    {record}", COLOR_WHITE)
+                    else:
+                        print_color(f"[-] ({country_info}, {city_info}): No se encontraron registros", COLOR_RED)
+                        
+                elif method == "ip-info":
+                    if isinstance(node_result, dict):
+                        print_color(f"[+] ({country_info}, {city_info}): Información encontrada", COLOR_GREEN)
+                        for key, value in node_result.items():
+                            print_color(f"    {key}: {value}", COLOR_WHITE)
+                    else:
+                        print_color(f"[?] ({country_info}, {city_info}): No hay información disponible", COLOR_YELLOW)
+                        
+            except Exception as e:
+                print_color(f"[?] ({country_info}, {city_info}): Error procesando resultado ({str(e)})", COLOR_YELLOW)
+                
     except requests.exceptions.RequestException as e:
         print_color(f"Error de conexión: {str(e)}", COLOR_RED)
     except json.JSONDecodeError:
-        print_color("Error al procesar la respuesta del servidor", COLOR_RED)
+        print_color("Error al procesar la respuesta JSON del servidor", COLOR_RED)
+    except Exception as e:
+        print_color(f"Error inesperado: {str(e)}", COLOR_RED)
 
 def main():
-    # Verificar si requests está instalado
     try:
         import requests
     except ImportError:
@@ -244,7 +252,6 @@ def main():
         print_color("En Termux, usa: pkg install python && pip install requests", COLOR_YELLOW)
         sys.exit(1)
 
-    # Configurar codificación UTF-8
     if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
         sys.stdout.reconfigure(encoding='utf-8')
 
@@ -254,7 +261,6 @@ def main():
     print_color("----------------------------------------", COLOR_WHITE)
     
     while True:
-        # Solicitar método al usuario
         method = input(f"{COLOR_GREEN}Selecciona el método (ip-info, ping, http, tcp, udp, dns) o 'exit' para terminar: {COLOR_RESET}").strip().lower()
         
         if method == 'exit':
@@ -265,16 +271,13 @@ def main():
             print_color("Método no válido. Por favor selecciona uno de los métodos disponibles.", COLOR_RED)
             continue
             
-        # Solicitar objetivo al usuario
         target = input(f"{COLOR_GREEN}Ingresa el objetivo (URL, IP o dominio) a verificar: {COLOR_RESET}").strip()
         
         if not target:
             print_color("Debes ingresar un objetivo válido.", COLOR_RED)
             continue
             
-        # Realizar la verificación
         perform_check(method, target)
-        
         print_color("\n----------------------------------------", COLOR_WHITE)
 
 if __name__ == "__main__":
