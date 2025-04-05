@@ -1,3 +1,6 @@
+# Ejemplo de uso al inicio
+print("Ejemplo de uso: Selecciona 'ping' como método y escribe 'google.com' como objetivo")
+
 # Node data organized by continent
 NODES_BY_CONTINENT = {
     "EU": [
@@ -115,7 +118,6 @@ def perform_check(method, target):
         
         # URL de la API de check-host.net según el método
         api_urls = {
-            "ip-info": f"https://check-host.net/ip-info?host={encoded_target}",
             "ping": f"https://check-host.net/check-ping?host={encoded_target}&max_nodes=50",
             "http": f"https://check-host.net/check-http?host={encoded_target}&max_nodes=50",
             "tcp": f"https://check-host.net/check-tcp?host={encoded_target}&max_nodes=50",
@@ -233,14 +235,6 @@ def perform_check(method, target):
                     else:
                         print_color(f"[-] ({country_info}, {city_info}): No se encontraron registros", COLOR_RED)
                         
-                elif method == "ip-info":
-                    if isinstance(node_result, dict):
-                        print_color(f"[+] ({country_info}, {city_info}): Información encontrada", COLOR_GREEN)
-                        for key, value in node_result.items():
-                            print_color(f"    {key}: {value}", COLOR_WHITE)
-                    else:
-                        print_color(f"[?] ({country_info}, {city_info}): No hay información disponible", COLOR_YELLOW)
-                        
             except Exception as e:
                 print_color(f"[?] ({country_info}, {city_info}): Error procesando resultado ({str(e)})", COLOR_YELLOW)
                 
@@ -265,17 +259,17 @@ def main():
 
     clear_screen()
     print_color("Herramienta para verificar hosts usando check-host.net", COLOR_BOLD + COLOR_CYAN)
-    print_color("Métodos disponibles: ip-info, ping, http, tcp, udp, dns", COLOR_YELLOW)
+    print_color("Métodos disponibles: ping, http, tcp, udp, dns", COLOR_YELLOW)
     print_color("----------------------------------------", COLOR_WHITE)
     
     while True:
-        method = input(f"{COLOR_GREEN}Selecciona el método (ip-info, ping, http, tcp, udp, dns) o 'exit' para terminar: {COLOR_RESET}").strip().lower()
+        method = input(f"{COLOR_GREEN}Selecciona el método (ping, http, tcp, udp, dns) o 'exit' para terminar: {COLOR_RESET}").strip().lower()
         
         if method == 'exit':
             print_color("¡Hasta luego!", COLOR_CYAN)
             break
             
-        if method not in ['ip-info', 'ping', 'http', 'tcp', 'udp', 'dns']:
+        if method not in ['ping', 'http', 'tcp', 'udp', 'dns']:
             print_color("Método no válido. Por favor selecciona uno de los métodos disponibles.", COLOR_RED)
             continue
             
