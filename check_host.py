@@ -1,162 +1,163 @@
-import json
-import argparse
-import requests
-from urllib.parse import quote
+#!/usr/bin/env python3
+import subprocess
+import socket
 import time
-from typing import Dict, List, Optional
+import requests
+import dns.resolver
+import threading
+from concurrent.futures import ThreadPoolExecutor
+from statistics import mean
 
-from src.script.method.ip_lookup import ip_lookup
-from src.script.method.whois import whois
-from src.script.method.ping import ping
-from src.script.method.http import http
-from src.script.method.tcp import tcp
-from src.script.method.udp import udp
-from src.script.method.dns import dns
-from src.script.logs import logs
+class NetworkTester:
+    def __init__(self, target="google.com", timeout=5):
+        self.target = target
+        self.timeout = timeout
+        self.results = {}
 
-# Node data organized by continent
-NODES_BY_CONTINENT = {
-    "EU": ["bg1.node.check-host.net", "ch1.node.check-host.net", "cz1.node.check-host.net", ...],  # Lista completa del segundo script
-    "AS": ["hk1.node.check-host.net", "il1.node.check-host.net", ...],
-    "NA": ["us1.node.check-host.net", "us2.node.check-host.net", "us3.node.check-host.net"],
-    "SA": ["br1.node.check-host.net"],
-    "EU-EAST": ["ru1.node.check-host.net", "ru2.node.check-host.net", ...]
-}
-
-ALL_NODES = [node for nodes in NODES_BY_CONTINENT.values() for node in nodes]
-
-NODE_DETAILS = {
-    "bg1.node.check-host.net": {"country": "Bulgaria", "city": "Sofia", "continent": "EU"},
-    "ch1.node.check-host.net": {"country": "Switzerland", "city": "Zurich", "continent": "EU"},
-    # ... resto de los detalles de nodos del segundo script
-}
-
-class CheckHost:
-    def __init__(self):
-        self.ip_lookup_class = ip_lookup()
-        self.whois_class = whois()
-        self.ping_class = ping()
-        self.http_class = http()
-        self.tcp_class = tcp()
-        self.udp_class = udp()
-        self.dns_class = dns()
-        self.logs_class = logs()
-
-    def _check_host_config_file_open(self) -> Dict[str, Dict[str, str]]:
-        with open("src/check-host-config.json", "r") as f:
-            return json.load(f)
-
-    def _check_host_config_access(self, func: str, attribute: str) -> str:
-        return self._check_host_config_file_open()[func][attribute]
-
-    def _check_host_logo(self) -> str:
-        version = self._check_host_config_access("check-host", "version")
-        return f"""
-              __           __       __            __ 
-         ____/ /  ___ ____/ /______/ /  ___  ___ / /_
-        / __/ _ \/ -_) __/  '_/___/ _ \/ _ \(_-</ __/
-        \__/_//_/\__/\__/_/\_\   /_//_/\___/___/\__/ v{version}
-                            https://github.com/Anonymous9875
-                            ــــــــﮩ٨ـﮩﮩ٨ـﮩ٨ـﮩﮩ٨ــــ
-        """
-
-    def _perform_network_check(self, method: str, target: str, max_nodes: Optional[int] = None) -> None:
+    def ping(self, count=4):
+        """Realiza un test de ping y mide latencia"""
         try:
-            encoded_target = quote(target, safe='')
-            api_urls = {
-                "ping": f"https://check-host.net/check-ping?host={encoded_target}",
-                "http": f"https://check-host.net/check-http?host={encoded_target}",
-                "tcp": f"https://check-host.net/check-tcp?host={encoded_target}",
-                "udp": f"https://check-host.net/check-udp?host={encoded_target}",
-                "dns": f"https://check-host.net/check-dns?host={encoded_target}"
+            # Comando ping diferente para Linux/Termux
+            cmd = f"ping -c {count} {self.target}"
+            start_time = time.time()
+            output = subprocess.check_output(cmd, shell=True, text=True)
+            end_time = time.time()
+            
+            # Extraer tiempos de respuesta
+            times = [float(line.split('time=')[1].split(' ')[0]) 
+                    for line in output.split('\n') if 'time=' in line]
+            
+            if times:
+                avg_latency = mean(times)
+                self.results['ping'] = {
+                    'status': 'online',
+                    'avg_latency': f"{avg_latency:.2f} ms",
+                    'speed': f"{(end_time - start_time)*1000/count:.2f} ms/packet"
+                }
+            else:
+                self.results['ping'] = {'status': 'offline'}
+                
+        except subprocess.CalledProcessError:
+            self.results['ping'] = {'status': 'offline'}
+
+    def http(self):
+        """Prueba conexión HTTP y mide velocidad de respuesta"""
+        try:
+            url = f"http://{self.target}"
+            start_time = time.time()
+            response = requests.get(url, timeout=self.timeout)
+            end_time = time.time()
+            
+            self.results['http'] = {
+                'status': 'online',
+                'response_time': f"{(end_time - start_time)*1000:.2f} ms",
+                'status_code': response.status_code
+            }
+        except requests.RequestException:
+            self.results['http'] = {'status': 'offline'}
+
+    def tcp(self, port=80):
+        """Prueba conexión TCP en el puerto especificado"""
+        try:
+            start_time = time.time()
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(self.timeout)
+            result = sock.connect_ex((self.target, port))
+            end_time = time.time()
+            
+            if result == 0:
+                self.results['tcp'] = {
+                    'status': 'online',
+                    'port': port,
+                    'response_time': f"{(end_time - start_time)*1000:.2f} ms"
+                }
+            else:
+                self.results['tcp'] = {'status': 'offline'}
+            sock.close()
+            
+        except socket.error:
+            self.results['tcp'] = {'status': 'offline'}
+
+    def udp(self, port=53):
+        """Prueba conexión UDP en el puerto especificado"""
+        try:
+            start_time = time.time()
+            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            sock.settimeout(self.timeout)
+            sock.sendto(b"test", (self.target, port))
+            data, _ = sock.recvfrom(1024)
+            end_time = time.time()
+            
+            self.results['udp'] = {
+                'status': 'online',
+                'port': port,
+                'response_time': f"{(end_time - start_time)*1000:.2f} ms"
+            }
+            sock.close()
+            
+        except socket.error:
+            self.results['udp'] = {'status': 'offline'}
+
+    def dns(self):
+        """Prueba resolución DNS"""
+        try:
+            start_time = time.time()
+            resolver = dns.resolver.Resolver()
+            answers = resolver.resolve(self.target, 'A')
+            end_time = time.time()
+            
+            ips = [answer.address for answer in answers]
+            self.results['dns'] = {
+                'status': 'online',
+                'ips': ips,
+                'resolution_time': f"{(end_time - start_time)*1000:.2f} ms"
             }
             
-            if max_nodes:
-                api_urls[method] += f"&max_nodes={max_nodes}"
-
-            headers = {"Accept": "application/json"}
-            response = requests.get(api_urls[method], headers=headers, timeout=15)
-            
-            if response.status_code != 200:
-                self.logs_class.logs_console_print("check-host/network", "error", 
-                    f"Request failed with status: {response.status_code}")
-                return
-
-            data = response.json()
-            request_id = data.get("request_id")
-            if not request_id:
-                self.logs_class.logs_console_print("check-host/network", "error", "No request_id received")
-                return
-
-            self.logs_class.logs_console_print("check-host/network", "info", 
-                f"Checking {method} for {target}...")
-
-            # Wait for results
-            max_wait, wait_interval, elapsed = 50, 2, 0
-            while elapsed < max_wait:
-                result_response = requests.get(f"https://check-host.net/check-result/{request_id}", 
-                                            headers=headers, timeout=15)
-                if result_response.status_code == 200:
-                    results = result_response.json()
-                    if all(node in results for node in ALL_NODES[:max_nodes or len(ALL_NODES)]):
-                        break
-                time.sleep(wait_interval)
-                elapsed += wait_interval
-
-            self._display_results(method, target, results)
-            
+        except dns.resolver.NXDOMAIN:
+            self.results['dns'] = {'status': 'offline'}
         except Exception as e:
-            self.logs_class.logs_console_print("check-host/network", "error", str(e))
+            self.results['dns'] = {'status': f'error: {str(e)}'}
 
-    def _display_results(self, method: str, target: str, results: Dict) -> None:
-        self.logs_class.logs_console_print("check-host/results", "info", f"\nResults for {method} - {target}:")
-        for node in ALL_NODES:
-            if node not in results or results[node] is None:
-                continue
-                
-            node_info = NODE_DETAILS.get(node, {"country": "Unknown", "city": "Unknown"})
-            result = results[node]
-            
-            if method == "ping" and isinstance(result, list) and len(result) >= 2:
-                avg_time = result[1]
-                status = f"{node_info['country']}, {node_info['city']}: {avg_time:.2f}ms" if avg_time else "No response"
-                self.logs_class.logs_console_print("check-host/results", "info", status)
-            # Agregar más condiciones para otros métodos según sea necesario
+    def run_all_tests(self):
+        """Ejecuta todos los tests en paralelo"""
+        with ThreadPoolExecutor(max_workers=5) as executor:
+            executor.submit(self.ping)
+            executor.submit(self.http)
+            executor.submit(self.tcp)
+            executor.submit(self.udp)
+            executor.submit(self.dns)
 
-    def _check_host_method(self, args: argparse.Namespace) -> None:
-        method_dict = {
-            "ip-lookup": self.ip_lookup_class.ip_lookup_run,
-            "whois": self.whois_class.whois_run,
-            "ping": lambda a: self._perform_network_check("ping", a.target, a.max_nodes),
-            "http": lambda a: self._perform_network_check("http", a.target, a.max_nodes),
-            "tcp": lambda a: self._perform_network_check("tcp", a.target, a.max_nodes),
-            "udp": lambda a: self._perform_network_check("udp", a.target, a.max_nodes),
-            "dns": lambda a: self._perform_network_check("dns", a.target, a.max_nodes)
-        }
-        method_dict[args.method](args)
+    def display_results(self):
+        """Muestra los resultados de las pruebas"""
+        print(f"\nResultados para {self.target}:")
+        print("-" * 50)
+        for test, result in self.results.items():
+            print(f"{test.upper()} Test:")
+            for key, value in result.items():
+                print(f"  {key}: {value}")
+            print()
 
-    def _check_host_argparse(self) -> argparse.Namespace:
-        parser = argparse.ArgumentParser(
-            description="Host checking tool",
-            usage="python3 check-host.py -m {method} -t {target} [-mx {max_nodes}]"
-        )
-        parser.add_argument("-t", "--target", required=True, help="Target host (URL, IP, or domain)")
-        parser.add_argument("-m", "--method", required=True, 
-                          choices=["ip-lookup", "whois", "ping", "http", "tcp", "udp", "dns"],
-                          help="Check method")
-        parser.add_argument("-mx", "--max-nodes", type=int, help="Maximum number of nodes")
-        return parser.parse_args()
-
-    def check_host_run(self) -> None:
-        self.logs_class.logs_logo_print(self._check_host_logo())
-        args = self._check_host_argparse()
-        self._check_host_method(args)
+def test_multiple_countries(target):
+    """Prueba el target desde diferentes servidores DNS por país"""
+    countries = {
+        'US': '8.8.8.8',    # Google DNS
+        'EU': '1.1.1.1',    # Cloudflare DNS
+        'RU': '77.88.8.8',  # Yandex DNS
+        'CN': '223.5.5.5'   # AliDNS
+    }
+    
+    for country, dns_server in countries.items():
+        print(f"\nTesting from {country}:")
+        tester = NetworkTester(target)
+        resolver = dns.resolver.Resolver()
+        resolver.nameservers = [dns_server]
+        tester.run_all_tests()
+        tester.display_results()
 
 if __name__ == "__main__":
-    try:
-        check_host = CheckHost()
-        check_host.check_host_run()
-    except SystemExit:
-        pass
-    except Exception as e:
-        print(f"Unexpected error: {e}")
+    # Lista de sitios web para probar
+    targets = ["google.com", "facebook.com", "twitter.com"]
+    
+    for target in targets:
+        print(f"\n{'='*50}\nTesting {target}\n{'='*50}")
+        test_multiple_countries(target)
