@@ -9,7 +9,7 @@ A comprehensive network testing tool that performs:
 - UDP checks
 - DNS resolution tests
 
-Works on both Linux and Termux environments.
+Uses Check-Host.net nodes for global testing.
 """
 
 import os
@@ -36,11 +36,177 @@ DEFAULT_TIMEOUT = 5  # seconds
 MAX_THREADS = 10
 PING_COUNT = 4  # Number of pings to send
 
+# Node data organized by continent
+NODES_BY_CONTINENT = {
+    "EU": [
+        "bg1.node.check-host.net", "ch1.node.check-host.net", "cz1.node.check-host.net",
+        "de1.node.check-host.net", "de4.node.check-host.net", "es1.node.check-host.net",
+        "fi1.node.check-host.net", "fr1.node.check-host.net", "fr2.node.check-host.net",
+        "hu1.node.check-host.net", "it2.node.check-host.net", "lt1.node.check-host.net",
+        "md1.node.check-host.net", "nl1.node.check-host.net", "nl2.node.check-host.net",
+        "pl1.node.check-host.net", "pl2.node.check-host.net", "pt1.node.check-host.net",
+        "rs1.node.check-host.net", "se1.node.check-host.net", "uk1.node.check-host.net"
+    ],
+    "AS": [
+        "hk1.node.check-host.net", "il1.node.check-host.net", "il2.node.check-host.net",
+        "in1.node.check-host.net", "in2.node.check-host.net", "ir1.node.check-host.net",
+        "ir3.node.check-host.net", "ir5.node.check-host.net", "ir6.node.check-host.net",
+        "jp1.node.check-host.net", "kz1.node.check-host.net", "tr1.node.check-host.net",
+        "tr2.node.check-host.net", "vn1.node.check-host.net"
+    ],
+    "NA": [
+        "us1.node.check-host.net", "us2.node.check-host.net", "us3.node.check-host.net"
+    ],
+    "SA": [
+        "br1.node.check-host.net"
+    ],
+    "EU-EAST": [
+        "ru1.node.check-host.net", "ru2.node.check-host.net", "ru3.node.check-host.net",
+        "ru4.node.check-host.net", "ua1.node.check-host.net", "ua2.node.check-host.net",
+        "ua3.node.check-host.net"
+    ]
+}
+
+# Node details mapping
+NODE_DETAILS = {
+    "bg1.node.check-host.net": {"country": "Bulgaria", "city": "Sofia", "continent": "EU"},
+    "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
+    "ch1.node.check-host.net": {"country": "Switzerland", "city": "Zurich", "continent": "EU"},
+    "cz1.node.check-host.net": {"country": "Czechia", "city": "C.Budejovice", "continent": "EU"},
+    "de1.node.check-host.net": {"country": "Germany", "city": "Nuremberg", "continent": "EU"},
+    "de4.node.check-host.net": {"country": "Germany", "city": "Frankfurt", "continent": "EU"},
+    "es1.node.check-host.net": {"country": "Spain", "city": "Barcelona", "continent": "EU"},
+    "fi1.node.check-host.net": {"country": "Finland", "city": "Helsinki", "continent": "EU"},
+    "fr1.node.check-host.net": {"country": "France", "city": "Roubaix", "continent": "EU"},
+    "fr2.node.check-host.net": {"country": "France", "city": "Paris", "continent": "EU"},
+    "hk1.node.check-host.net": {"country": "Hong Kong", "city": "Hong Kong", "continent": "AS"},
+    "hu1.node.check-host.net": {"country": "Hungary", "city": "Nyiregyhaza", "continent": "EU"},
+    "il1.node.check-host.net": {"country": "Israel", "city": "Tel Aviv", "continent": "AS"},
+    "il2.node.check-host.net": {"country": "Israel", "city": "Netanya", "continent": "AS"},
+    "in1.node.check-host.net": {"country": "India", "city": "Mumbai", "continent": "AS"},
+    "in2.node.check-host.net": {"country": "India", "city": "Chennai", "continent": "AS"},
+    "ir1.node.check-host.net": {"country": "Iran", "city": "Tehran", "continent": "AS"},
+    "ir3.node.check-host.net": {"country": "Iran", "city": "Mashhad", "continent": "AS"},
+    "ir5.node.check-host.net": {"country": "Iran", "city": "Esfahan", "continent": "AS"},
+    "ir6.node.check-host.net": {"country": "Iran", "city": "Karaj", "continent": "AS"},
+    "it2.node.check-host.net": {"country": "Italy", "city": "Milan", "continent": "EU"},
+    "jp1.node.check-host.net": {"country": "Japan", "city": "Tokyo", "continent": "AS"},
+    "kz1.node.check-host.net": {"country": "Kazakhstan", "city": "Karaganda", "continent": "AS"},
+    "lt1.node.check-host.net": {"country": "Lithuania", "city": "Vilnius", "continent": "EU"},
+    "md1.node.check-host.net": {"country": "Moldova", "city": "Chisinau", "continent": "EU"},
+    "nl1.node.check-host.net": {"country": "Netherlands", "city": "Amsterdam", "continent": "EU"},
+    "nl2.node.check-host.net": {"country": "Netherlands", "city": "Meppel", "continent": "EU"},
+    "pl1.node.check-host.net": {"country": "Poland", "city": "Poznan", "continent": "EU"},
+    "pl2.node.check-host.net": {"country": "Poland", "city": "Warsaw", "continent": "EU"},
+    "pt1.node.check-host.net": {"country": "Portugal", "city": "Viana", "continent": "EU"},
+    "rs1.node.check-host.net": {"country": "Serbia", "city": "Belgrade", "continent": "EU"},
+    "ru1.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
+    "ru2.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
+    "ru3.node.check-host.net": {"country": "Russia", "city": "Saint Petersburg", "continent": "EU-EAST"},
+    "ru4.node.check-host.net": {"country": "Russia", "city": "Ekaterinburg", "continent": "EU-EAST"},
+    "se1.node.check-host.net": {"country": "Sweden", "city": "Tallberg", "continent": "EU"},
+    "tr1.node.check-host.net": {"country": "Turkey", "city": "Istanbul", "continent": "AS"},
+    "tr2.node.check-host.net": {"country": "Turkey", "city": "Gebze", "continent": "AS"},
+    "ua1.node.check-host.net": {"country": "Ukraine", "city": "Khmelnytskyi", "continent": "EU-EAST"},
+    "ua2.node.check-host.net": {"country": "Ukraine", "city": "Kyiv", "continent": "EU-EAST"},
+    "ua3.node.check-host.net": {"country": "Ukraine", "city": "SpaceX Starlink", "continent": "EU-EAST"},
+    "uk1.node.check-host.net": {"country": "UK", "city": "Coventry", "continent": "EU"},
+    "us1.node.check-host.net": {"country": "USA", "city": "Los Angeles", "continent": "NA"},
+    "us2.node.check-host.net": {"country": "USA", "city": "Dallas", "continent": "NA"},
+    "us3.node.check-host.net": {"country": "USA", "city": "Atlanta", "continent": "NA"},
+    "vn1.node.check-host.net": {"country": "Vietnam", "city": "Ho Chi Minh City", "continent": "AS"}
+}
+
+class CheckHostAPI:
+    """Client for the Check-Host API, focused on ping and HTTP checks."""
+    
+    BASE_URL = "https://check-host.net"
+    
+    def __init__(self):
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'NetworkTester/1.0',
+            'Accept': 'application/json'
+        })
+    
+    def check_ping(self, host: str, nodes: List[str] = None, max_nodes: int = 10) -> Dict:
+        """Perform ping check from multiple nodes."""
+        if nodes is None:
+            nodes = list(NODE_DETAILS.keys())[:max_nodes]
+        
+        params = {
+            'host': host,
+            'node': nodes,
+            'max_nodes': max_nodes
+        }
+        
+        try:
+            # Request new check
+            response = self.session.get(
+                f"{self.BASE_URL}/check-ping",
+                params=params,
+                timeout=DEFAULT_TIMEOUT
+            )
+            response.raise_for_status()
+            
+            # Get check ID and wait for results
+            check_id = response.json().get('request_id')
+            if not check_id:
+                return {'error': 'No check ID received'}
+            
+            # Wait and get results
+            time.sleep(5)  # Wait for nodes to respond
+            result_url = f"{self.BASE_URL}/check-result/{check_id}"
+            result_response = self.session.get(result_url, timeout=DEFAULT_TIMEOUT)
+            result_response.raise_for_status()
+            
+            return result_response.json()
+            
+        except requests.exceptions.RequestException as e:
+            return {'error': str(e)}
+    
+    def check_http(self, url: str, nodes: List[str] = None, max_nodes: int = 10) -> Dict:
+        """Perform HTTP check from multiple nodes."""
+        if nodes is None:
+            nodes = list(NODE_DETAILS.keys())[:max_nodes]
+        
+        params = {
+            'host': url,
+            'node': nodes,
+            'max_nodes': max_nodes
+        }
+        
+        try:
+            # Request new check
+            response = self.session.get(
+                f"{self.BASE_URL}/check-http",
+                params=params,
+                timeout=DEFAULT_TIMEOUT
+            )
+            response.raise_for_status()
+            
+            # Get check ID and wait for results
+            check_id = response.json().get('request_id')
+            if not check_id:
+                return {'error': 'No check ID received'}
+            
+            # Wait and get results
+            time.sleep(5)  # Wait for nodes to respond
+            result_url = f"{self.BASE_URL}/check-result/{check_id}"
+            result_response = self.session.get(result_url, timeout=DEFAULT_TIMEOUT)
+            result_response.raise_for_status()
+            
+            return result_response.json()
+            
+        except requests.exceptions.RequestException as e:
+            return {'error': str(e)}
+
 class NetworkTester:
     def __init__(self):
         self.ping_path = self._find_ping_binary()
         self.timeout = DEFAULT_TIMEOUT
         self.max_threads = MAX_THREADS
+        self.check_host_api = CheckHostAPI()
 
     def _find_ping_binary(self) -> str:
         """Find the appropriate ping binary for the system."""
@@ -318,7 +484,7 @@ class NetworkTester:
     def check_global_availability(self, host: str, check_type: str = 'ping', 
                                 port: Optional[int] = None) -> Dict[str, Dict[str, Dict]]:
         """
-        Check global availability by testing from multiple locations.
+        Check global availability by testing from multiple Check-Host nodes.
         
         Args:
             host: Host to check
@@ -326,38 +492,84 @@ class NetworkTester:
             port: Port number (required for tcp/udp checks)
             
         Returns:
-            Dictionary with results from different regions
+            Dictionary with results from different nodes
         """
-        # This is a simplified version. In a real implementation, you would:
-        # 1. Use a service with global nodes (like the original script)
-        # 2. Or deploy your own nodes in different regions
-        # 3. Or use cloud provider APIs
-        
-        # For this example, we'll simulate different regions by using different DNS servers
-        regions = {
-            'North America': {'dns': '8.8.8.8'},  # Google DNS
-            'Europe': {'dns': '1.1.1.1'},        # Cloudflare DNS
-            'Asia': {'dns': '114.114.114.114'},  # China DNS
-            'South America': {'dns': '200.160.0.29'},  # Brazil DNS
-            'Oceania': {'dns': '203.50.2.71'}    # Australia DNS
-        }
-
         results = {}
+        
+        if check_type in ['ping', 'http']:
+            # Use Check-Host API for ping and http checks
+            if check_type == 'ping':
+                api_result = self.check_host_api.check_ping(host)
+            else:  # http
+                api_result = self.check_host_api.check_http(host)
+            
+            if 'error' in api_result:
+                return {'error': api_result['error']}
+            
+            # Process API results
+            for node, node_result in api_result.items():
+                if node in NODE_DETAILS:
+                    region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
+                    
+                    if check_type == 'ping':
+                        if node_result and isinstance(node_result, list) and len(node_result) > 0:
+                            ping_result = node_result[0]
+                            if isinstance(ping_result, dict) and 'rtt' in ping_result:
+                                results[region] = {
+                                    'success': True,
+                                    'avg_latency': ping_result['rtt'],
+                                    'min_latency': ping_result['rtt'],
+                                    'max_latency': ping_result['rtt'],
+                                    'packet_loss': 0.0
+                                }
+                            else:
+                                results[region] = {
+                                    'success': False,
+                                    'error': 'Invalid ping response'
+                                }
+                        else:
+                            results[region] = {
+                                'success': False,
+                                'error': 'No ping data'
+                            }
+                    else:  # http
+                        if node_result and isinstance(node_result, dict):
+                            results[region] = {
+                                'success': node_result.get('status', '').startswith('OK'),
+                                'status_code': node_result.get('response_code', 0),
+                                'response_time': node_result.get('time', 0)
+                            }
+                        else:
+                            results[region] = {
+                                'success': False,
+                                'error': 'No HTTP data'
+                            }
+            return results
+        
+        # For other check types, use the existing method with selected nodes
+        selected_nodes = {
+            'North America': {'node': 'us1.node.check-host.net'},
+            'Europe': {'node': 'uk1.node.check-host.net'},
+            'Asia': {'node': 'jp1.node.check-host.net'},
+            'South America': {'node': 'br1.node.check-host.net'},
+            'Oceania': {'node': 'au1.node.check-host.net'}  # Note: Not in original list, would need to be added
+        }
         
         with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
             futures = {}
             
-            for region, config in regions.items():
+            for region, config in selected_nodes.items():
+                node = config['node']
                 if check_type == 'dns':
-                    futures[executor.submit(self.dns_check, host, config['dns'])] = region
+                    futures[executor.submit(self.dns_check, host, node)] = region
                 elif check_type == 'ping':
-                    futures[executor.submit(self.ping, host)] = region
+                    futures[executor.submit(self.ping, node)] = region
                 elif check_type == 'http':
-                    futures[executor.submit(self.http_check, host)] = region
+                    futures[executor.submit(self.http_check, f"http://{node}")] = region
                 elif check_type == 'tcp' and port:
-                    futures[executor.submit(self.tcp_check, host, port)] = region
+                    futures[executor.submit(self.tcp_check, node, port)] = region
                 elif check_type == 'udp' and port:
-                    futures[executor.submit(self.udp_check, host, port)] = region
+                    futures[executor.submit(self.udp_check, node, port)] = region
             
             for future in concurrent.futures.as_completed(futures):
                 region = futures[future]
@@ -372,91 +584,114 @@ class NetworkTester:
 def display_ping_results(results: Dict) -> None:
     """Display ping results in a formatted way."""
     print(f"\n{Fore.CYAN}PING RESULTS:{Style.RESET_ALL}")
-    print(f"{'Region':<20} {'Status':<10} {'Packet Loss':<15} {'Latency (min/avg/max)':<25}")
-    print("-" * 70)
+    print(f"{'Location':<30} {'Status':<10} {'Packet Loss':<15} {'Latency (min/avg/max)':<25}")
+    print("-" * 80)
     
-    for region, data in results.items():
-        status = f"{Fore.GREEN}UP{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}DOWN{Style.RESET_ALL}"
-        packet_loss = f"{data.get('packet_loss', 0):.1f}%"
-        
-        if data.get('success'):
-            latency = f"{data.get('min_latency', 0):.1f}/{data.get('avg_latency', 0):.1f}/{data.get('max_latency', 0):.1f} ms"
+    for location, data in results.items():
+        if 'error' in data:
+            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
+            packet_loss = "N/A"
+            latency = data['error']
         else:
-            latency = "N/A"
+            status = f"{Fore.GREEN}UP{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}DOWN{Style.RESET_ALL}"
+            packet_loss = f"{data.get('packet_loss', 0):.1f}%"
+            
+            if data.get('success'):
+                latency = f"{data.get('min_latency', 0):.1f}/{data.get('avg_latency', 0):.1f}/{data.get('max_latency', 0):.1f} ms"
+            else:
+                latency = "N/A"
         
-        print(f"{region:<20} {status:<10} {packet_loss:<15} {latency:<25}")
+        print(f"{location:<30} {status:<10} {packet_loss:<15} {latency:<25}")
 
 
 def display_http_results(results: Dict) -> None:
     """Display HTTP results in a formatted way."""
     print(f"\n{Fore.CYAN}HTTP RESULTS:{Style.RESET_ALL}")
-    print(f"{'Region':<20} {'Status':<10} {'Response Code':<15} {'Response Time':<15}")
-    print("-" * 70)
+    print(f"{'Location':<30} {'Status':<10} {'Response Code':<15} {'Response Time':<15}")
+    print("-" * 80)
     
-    for region, data in results.items():
-        if data.get('success'):
-            status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
-            code = str(data.get('status_code', 'N/A'))
-            time_ms = f"{data.get('response_time', 0):.1f} ms"
-        else:
-            status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
+    for location, data in results.items():
+        if 'error' in data:
+            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
             code = "N/A"
-            time_ms = "N/A"
+            time_ms = data['error']
+        else:
+            if data.get('success'):
+                status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
+                code = str(data.get('status_code', 'N/A'))
+                time_ms = f"{data.get('response_time', 0):.1f} ms"
+            else:
+                status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
+                code = "N/A"
+                time_ms = "N/A"
         
-        print(f"{region:<20} {status:<10} {code:<15} {time_ms:<15}")
+        print(f"{location:<30} {status:<10} {code:<15} {time_ms:<15}")
 
 
 def display_tcp_results(results: Dict, port: int) -> None:
     """Display TCP results in a formatted way."""
     print(f"\n{Fore.CYAN}TCP PORT {port} RESULTS:{Style.RESET_ALL}")
-    print(f"{'Region':<20} {'Status':<10} {'Connect Time':<15}")
-    print("-" * 70)
+    print(f"{'Location':<30} {'Status':<10} {'Connect Time':<15}")
+    print("-" * 80)
     
-    for region, data in results.items():
-        if data.get('success'):
-            status = f"{Fore.GREEN}OPEN{Style.RESET_ALL}"
-            time_ms = f"{data.get('connect_time', 0):.1f} ms"
+    for location, data in results.items():
+        if 'error' in data:
+            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
+            time_ms = data['error']
         else:
-            status = f"{Fore.RED}CLOSED{Style.RESET_ALL}"
-            time_ms = "N/A"
+            if data.get('success'):
+                status = f"{Fore.GREEN}OPEN{Style.RESET_ALL}"
+                time_ms = f"{data.get('connect_time', 0):.1f} ms"
+            else:
+                status = f"{Fore.RED}CLOSED{Style.RESET_ALL}"
+                time_ms = "N/A"
         
-        print(f"{region:<20} {status:<10} {time_ms:<15}")
+        print(f"{location:<30} {status:<10} {time_ms:<15}")
 
 
 def display_udp_results(results: Dict, port: int) -> None:
     """Display UDP results in a formatted way."""
     print(f"\n{Fore.CYAN}UDP PORT {port} RESULTS:{Style.RESET_ALL}")
-    print(f"{'Region':<20} {'Status':<10} {'Response Time':<15}")
-    print("-" * 70)
+    print(f"{'Location':<30} {'Status':<10} {'Response Time':<15}")
+    print("-" * 80)
     
-    for region, data in results.items():
-        if data.get('success'):
-            status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
-            time_ms = f"{data.get('response_time', 0):.1f} ms" if 'response_time' in data else "No response"
+    for location, data in results.items():
+        if 'error' in data:
+            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
+            time_ms = data['error']
         else:
-            status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
-            time_ms = "N/A"
+            if data.get('success'):
+                status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
+                time_ms = f"{data.get('response_time', 0):.1f} ms" if 'response_time' in data else "No response"
+            else:
+                status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
+                time_ms = "N/A"
         
-        print(f"{region:<20} {status:<10} {time_ms:<15}")
+        print(f"{location:<30} {status:<10} {time_ms:<15}")
 
 
 def display_dns_results(results: Dict) -> None:
     """Display DNS results in a formatted way."""
     print(f"\n{Fore.CYAN}DNS RESULTS:{Style.RESET_ALL}")
-    print(f"{'Region':<20} {'Status':<10} {'Resolution Time':<20} {'Addresses':<30}")
-    print("-" * 70)
+    print(f"{'Location':<30} {'Status':<10} {'Resolution Time':<20} {'Addresses':<30}")
+    print("-" * 80)
     
-    for region, data in results.items():
-        if data.get('success'):
-            status = f"{Fore.GREEN}OK{Style.RESET_ALL}"
-            time_ms = f"{data.get('resolution_time', 0):.1f} ms"
-            addresses = ", ".join(data.get('addresses', []))[:30]
-        else:
-            status = f"{Fore.RED}FAIL{Style.RESET_ALL}"
+    for location, data in results.items():
+        if 'error' in data:
+            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
             time_ms = "N/A"
-            addresses = data.get('error', 'Unknown error')
+            addresses = data['error']
+        else:
+            if data.get('success'):
+                status = f"{Fore.GREEN}OK{Style.RESET_ALL}"
+                time_ms = f"{data.get('resolution_time', 0):.1f} ms"
+                addresses = ", ".join(data.get('addresses', []))[:30]
+            else:
+                status = f"{Fore.RED}FAIL{Style.RESET_ALL}"
+                time_ms = "N/A"
+                addresses = data.get('error', 'Unknown error')
         
-        print(f"{region:<20} {status:<10} {time_ms:<20} {addresses:<30}")
+        print(f"{location:<30} {status:<10} {time_ms:<20} {addresses:<30}")
 
 
 def save_results(results: Dict, filename: str, format: str = 'json') -> None:
@@ -467,7 +702,7 @@ def save_results(results: Dict, filename: str, format: str = 'json') -> None:
                 json.dump(results, f, indent=2)
             else:  # text
                 for region, data in results.items():
-                    f.write(f"Region: {region}\n")
+                    f.write(f"Location: {region}\n")
                     for key, value in data.items():
                         f.write(f"  {key}: {value}\n")
                     f.write("\n")
