@@ -155,7 +155,7 @@ def perform_check(method, target):
         print_color("Esperando resultados de los servidores...", COLOR_YELLOW)
         
         # Esperar a que los resultados estén listos (ajustado dinámicamente)
-        max_wait = 20  # Tiempo máximo de espera en segundos
+        max_wait = 50  # Tiempo máximo de espera en segundos
         wait_interval = 2  # Intervalo entre verificaciones
         elapsed = 0
         
