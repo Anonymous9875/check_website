@@ -116,11 +116,11 @@ def perform_check(method, target):
         # URL de la API de check-host.net según el método
         api_urls = {
             "ip-info": f"https://check-host.net/ip-info?host={encoded_target}",
-            "ping": f"https://check-host.net/check-ping?host={encoded_target}",
-            "http": f"https://check-host.net/check-http?host={encoded_target}",
-            "tcp": f"https://check-host.net/check-tcp?host={encoded_target}",
-            "udp": f"https://check-host.net/check-udp?host={encoded_target}",
-            "dns": f"https://check-host.net/check-dns?host={encoded_target}"
+            "ping": f"https://check-host.net/check-ping?host={encoded_target}&max_nodes=50",
+            "http": f"https://check-host.net/check-http?host={encoded_target}&max_nodes=50",
+            "tcp": f"https://check-host.net/check-tcp?host={encoded_target}&max_nodes=50",
+            "udp": f"https://check-host.net/check-udp?host={encoded_target}&max_nodes=50",
+            "dns": f"https://check-host.net/check-dns?host={encoded_target}&max_nodes=50"
         }
         
         if method not in api_urls:
@@ -136,7 +136,7 @@ def perform_check(method, target):
         }
         
         # Hacer la solicitud GET a la API
-        response = requests.get(api_url, headers=headers, timeout=10)
+        response = requests.get(api_url, headers=headers, timeout=15)
         
         if response.status_code != 200:
             print_color(f"Error en la solicitud inicial: Código {response.status_code}", COLOR_RED)
@@ -154,18 +154,26 @@ def perform_check(method, target):
         print_color(f"\nRealizando {method} en: {target}", COLOR_CYAN)
         print_color("Esperando resultados de los servidores...", COLOR_YELLOW)
         
-        # Esperar a que los resultados estén listos (aumentado a 10 segundos para mayor fiabilidad)
-        time.sleep(10)
+        # Esperar a que los resultados estén listos (ajustado dinámicamente)
+        max_wait = 20  # Tiempo máximo de espera en segundos
+        wait_interval = 2  # Intervalo entre verificaciones
+        elapsed = 0
         
-        # Obtener resultados
-        result_url = f"https://check-host.net/check-result/{request_id}"
-        result_response = requests.get(result_url, headers=headers, timeout=15)
-        
-        if result_response.status_code != 200:
-            print_color(f"Error al obtener resultados: Código {result_response.status_code}", COLOR_RED)
-            return
+        while elapsed < max_wait:
+            result_url = f"https://check-host.net/check-result/{request_id}"
+            result_response = requests.get(result_url, headers=headers, timeout=15)
             
-        results = result_response.json()
+            if result_response.status_code == 200:
+                results = result_response.json()
+                # Verificar si hay suficientes resultados completados
+                completed_nodes = sum(1 for node in nodes if results.get(node) is not None)
+                if completed_nodes >= len(nodes) * 0.8:  # 80% de nodos completados
+                    break
+            time.sleep(wait_interval)
+            elapsed += wait_interval
+        
+        if elapsed >= max_wait:
+            print_color("Advertencia: Tiempo de espera agotado, mostrando resultados parciales.", COLOR_YELLOW)
         
         if not results:
             print_color("No se recibieron resultados válidos.", COLOR_YELLOW)
@@ -184,20 +192,20 @@ def perform_check(method, target):
                 
             try:
                 if method == "ping":
-                    if isinstance(node_result, list) and len(node_result) == 4:
+                    if isinstance(node_result, list) and len(node_result) >= 2:
                         avg_time = node_result[1]
-                        if avg_time is not None:
+                        if avg_time is not None and isinstance(avg_time, (int, float)):
                             print_color(f"[+] ({country_info}, {city_info}): Ping promedio: {avg_time:.2f} ms", COLOR_GREEN)
                         else:
                             print_color(f"[-] ({country_info}, {city_info}): No responde", COLOR_RED)
                     else:
-                        print_color(f"[-] ({country_info}, {city_info}): Error en el resultado", COLOR_RED)
+                        print_color(f"[?] ({country_info}, {city_info}): Resultado inesperado", COLOR_YELLOW)
                         
                 elif method == "http":
                     if isinstance(node_result, list) and len(node_result) >= 2:
                         status = node_result[0]
                         detail = node_result[1]
-                        if status == 1 and isinstance(detail, float):
+                        if status == 1 and isinstance(detail, (int, float)):
                             print_color(f"[+] ({country_info}, {city_info}): Online (Tiempo: {detail:.3f}s)", COLOR_GREEN)
                         else:
                             error_msg = detail if isinstance(detail, str) else "Error desconocido"
