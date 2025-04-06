@@ -200,6 +200,42 @@ class CheckHostAPI:
             
         except requests.exceptions.RequestException as e:
             return {'error': str(e)}
+    
+    def check_tcp(self, host: str, port: int, nodes: List[str] = None, max_nodes: int = 10) -> Dict:
+        """Perform TCP check from multiple nodes."""
+        if nodes is None:
+            nodes = list(NODE_DETAILS.keys())[:max_nodes]
+        
+        params = {
+            'host': f"{host}:{port}",
+            'node': nodes,
+            'max_nodes': max_nodes
+        }
+        
+        try:
+            # Request new check
+            response = self.session.get(
+                f"{self.BASE_URL}/check-tcp",
+                params=params,
+                timeout=DEFAULT_TIMEOUT
+            )
+            response.raise_for_status()
+            
+            # Get check ID and wait for results
+            check_id = response.json().get('request_id')
+            if not check_id:
+                return {'error': 'No check ID received'}
+            
+            # Wait and get results
+            time.sleep(5)  # Wait for nodes to respond
+            result_url = f"{self.BASE_URL}/check-result/{check_id}"
+            result_response = self.session.get(result_url, timeout=DEFAULT_TIMEOUT)
+            result_response.raise_for_status()
+            
+            return result_response.json()
+            
+        except requests.exceptions.RequestException as e:
+            return {'error': str(e)}
 
 class NetworkTester:
     def __init__(self):
@@ -496,12 +532,16 @@ class NetworkTester:
         """
         results = {}
         
-        if check_type in ['ping', 'http']:
-            # Use Check-Host API for ping and http checks
+        if check_type in ['ping', 'http', 'tcp']:
+            # Use Check-Host API for ping, http and tcp checks
             if check_type == 'ping':
                 api_result = self.check_host_api.check_ping(host)
-            else:  # http
+            elif check_type == 'http':
                 api_result = self.check_host_api.check_http(host)
+            else:  # tcp
+                if not port:
+                    return {'error': 'Port number is required for TCP checks'}
+                api_result = self.check_host_api.check_tcp(host, port)
             
             if 'error' in api_result:
                 return {'error': api_result['error']}
@@ -532,7 +572,7 @@ class NetworkTester:
                                 'success': False,
                                 'error': 'No ping data'
                             }
-                    else:  # http
+                    elif check_type == 'http':
                         if node_result and isinstance(node_result, dict):
                             results[region] = {
                                 'success': node_result.get('status', '').startswith('OK'),
@@ -544,9 +584,27 @@ class NetworkTester:
                                 'success': False,
                                 'error': 'No HTTP data'
                             }
+                    elif check_type == 'tcp':
+                        if node_result and isinstance(node_result, list) and len(node_result) > 0:
+                            tcp_result = node_result[0]
+                            if isinstance(tcp_result, dict) and 'time' in tcp_result:
+                                results[region] = {
+                                    'success': True,
+                                    'connect_time': tcp_result['time']
+                                }
+                            else:
+                                results[region] = {
+                                    'success': False,
+                                    'error': 'Invalid TCP response'
+                                }
+                        else:
+                            results[region] = {
+                                'success': False,
+                                'error': 'No TCP data'
+                            }
             return results
         
-        # For other check types, use the existing method with selected nodes
+        # For UDP and DNS checks, use the existing method with selected nodes
         selected_nodes = {
             'North America': {'node': 'us1.node.check-host.net'},
             'Europe': {'node': 'uk1.node.check-host.net'},
@@ -562,12 +620,6 @@ class NetworkTester:
                 node = config['node']
                 if check_type == 'dns':
                     futures[executor.submit(self.dns_check, host, node)] = region
-                elif check_type == 'ping':
-                    futures[executor.submit(self.ping, node)] = region
-                elif check_type == 'http':
-                    futures[executor.submit(self.http_check, f"http://{node}")] = region
-                elif check_type == 'tcp' and port:
-                    futures[executor.submit(self.tcp_check, node, port)] = region
                 elif check_type == 'udp' and port:
                     futures[executor.submit(self.udp_check, node, port)] = region
             
