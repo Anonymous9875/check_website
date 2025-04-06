@@ -32,9 +32,12 @@ from colorama import Fore, Style, Back
 colorama.init(autoreset=True)
 
 # Global configuration
-DEFAULT_TIMEOUT = 5  # seconds
+DEFAULT_TIMEOUT = 10  # seconds (increased from 5)
 MAX_THREADS = 10
 PING_COUNT = 4  # Number of pings to send
+MAX_RETRIES = 3  # Max retries for API checks
+RESULT_WAIT_TIME = 10  # Initial wait time for results (increased from 5)
+MAX_WAIT_TIME = 30  # Max total wait time for results
 
 # Node data organized by continent
 NODES_BY_CONTINENT = {
@@ -129,6 +132,33 @@ class CheckHostAPI:
             'Accept': 'application/json'
         })
     
+    def _get_check_results(self, check_id: str) -> Dict:
+        """Wait for and retrieve check results with retries."""
+        result_url = f"{self.BASE_URL}/check-result/{check_id}"
+        start_time = time.time()
+        elapsed = 0
+        
+        while elapsed < MAX_WAIT_TIME:
+            try:
+                time.sleep(RESULT_WAIT_TIME)
+                response = self.session.get(result_url, timeout=DEFAULT_TIMEOUT)
+                response.raise_for_status()
+                
+                result_data = response.json()
+                
+                # Check if all nodes have responded
+                if all(v is not None for v in result_data.values()):
+                    return result_data
+                
+                elapsed = time.time() - start_time
+                
+            except requests.exceptions.RequestException as e:
+                elapsed = time.time() - start_time
+                if elapsed >= MAX_WAIT_TIME:
+                    return {'error': f"Timeout waiting for results: {str(e)}"}
+                
+        return {'error': 'Timeout waiting for all nodes to respond'}
+    
     def check_ping(self, host: str, nodes: List[str] = None) -> Dict:
         """Perform ping check from multiple nodes."""
         if nodes is None:
@@ -139,30 +169,30 @@ class CheckHostAPI:
             'node': nodes
         }
         
-        try:
-            # Request new check
-            response = self.session.get(
-                f"{self.BASE_URL}/check-ping",
-                params=params,
-                timeout=DEFAULT_TIMEOUT
-            )
-            response.raise_for_status()
-            
-            # Get check ID and wait for results
-            check_id = response.json().get('request_id')
-            if not check_id:
-                return {'error': 'No check ID received'}
-            
-            # Wait and get results
-            time.sleep(5)  # Wait for nodes to respond
-            result_url = f"{self.BASE_URL}/check-result/{check_id}"
-            result_response = self.session.get(result_url, timeout=DEFAULT_TIMEOUT)
-            result_response.raise_for_status()
-            
-            return result_response.json()
-            
-        except requests.exceptions.RequestException as e:
-            return {'error': str(e)}
+        for attempt in range(MAX_RETRIES):
+            try:
+                # Request new check
+                response = self.session.get(
+                    f"{self.BASE_URL}/check-ping",
+                    params=params,
+                    timeout=DEFAULT_TIMEOUT
+                )
+                response.raise_for_status()
+                
+                # Get check ID and wait for results
+                check_id = response.json().get('request_id')
+                if not check_id:
+                    if attempt == MAX_RETRIES - 1:
+                        return {'error': 'No check ID received after retries'}
+                    continue
+                
+                # Get results with retries
+                return self._get_check_results(check_id)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == MAX_RETRIES - 1:
+                    return {'error': f"API request failed after retries: {str(e)}"}
+                time.sleep(2)  # Wait before retry
     
     def check_http(self, url: str, nodes: List[str] = None) -> Dict:
         """Perform HTTP check from multiple nodes."""
@@ -174,30 +204,30 @@ class CheckHostAPI:
             'node': nodes
         }
         
-        try:
-            # Request new check
-            response = self.session.get(
-                f"{self.BASE_URL}/check-http",
-                params=params,
-                timeout=DEFAULT_TIMEOUT
-            )
-            response.raise_for_status()
-            
-            # Get check ID and wait for results
-            check_id = response.json().get('request_id')
-            if not check_id:
-                return {'error': 'No check ID received'}
-            
-            # Wait and get results
-            time.sleep(5)  # Wait for nodes to respond
-            result_url = f"{self.BASE_URL}/check-result/{check_id}"
-            result_response = self.session.get(result_url, timeout=DEFAULT_TIMEOUT)
-            result_response.raise_for_status()
-            
-            return result_response.json()
-            
-        except requests.exceptions.RequestException as e:
-            return {'error': str(e)}
+        for attempt in range(MAX_RETRIES):
+            try:
+                # Request new check
+                response = self.session.get(
+                    f"{self.BASE_URL}/check-http",
+                    params=params,
+                    timeout=DEFAULT_TIMEOUT
+                )
+                response.raise_for_status()
+                
+                # Get check ID and wait for results
+                check_id = response.json().get('request_id')
+                if not check_id:
+                    if attempt == MAX_RETRIES - 1:
+                        return {'error': 'No check ID received after retries'}
+                    continue
+                
+                # Get results with retries
+                return self._get_check_results(check_id)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == MAX_RETRIES - 1:
+                    return {'error': f"API request failed after retries: {str(e)}"}
+                time.sleep(2)  # Wait before retry
     
     def check_tcp(self, host: str, port: int, nodes: List[str] = None) -> Dict:
         """Perform TCP check from multiple nodes."""
@@ -209,30 +239,30 @@ class CheckHostAPI:
             'node': nodes
         }
         
-        try:
-            # Request new check
-            response = self.session.get(
-                f"{self.BASE_URL}/check-tcp",
-                params=params,
-                timeout=DEFAULT_TIMEOUT
-            )
-            response.raise_for_status()
-            
-            # Get check ID and wait for results
-            check_id = response.json().get('request_id')
-            if not check_id:
-                return {'error': 'No check ID received'}
-            
-            # Wait and get results
-            time.sleep(5)  # Wait for nodes to respond
-            result_url = f"{self.BASE_URL}/check-result/{check_id}"
-            result_response = self.session.get(result_url, timeout=DEFAULT_TIMEOUT)
-            result_response.raise_for_status()
-            
-            return result_response.json()
-            
-        except requests.exceptions.RequestException as e:
-            return {'error': str(e)}
+        for attempt in range(MAX_RETRIES):
+            try:
+                # Request new check
+                response = self.session.get(
+                    f"{self.BASE_URL}/check-tcp",
+                    params=params,
+                    timeout=DEFAULT_TIMEOUT
+                )
+                response.raise_for_status()
+                
+                # Get check ID and wait for results
+                check_id = response.json().get('request_id')
+                if not check_id:
+                    if attempt == MAX_RETRIES - 1:
+                        return {'error': 'No check ID received after retries'}
+                    continue
+                
+                # Get results with retries
+                return self._get_check_results(check_id)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == MAX_RETRIES - 1:
+                    return {'error': f"API request failed after retries: {str(e)}"}
+                time.sleep(2)  # Wait before retry
 
 class NetworkTester:
     def __init__(self):
@@ -689,7 +719,7 @@ def interactive_mode():
     while True:
         print("\nOptions:")
         print("1. Ping test")
-        print("2. HTTP/HTTPS test")
+        print("2. HTTP test")
         print("3. TCP port test")
         print("4. UDP port test")
         print("5. DNS resolution test")
