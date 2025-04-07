@@ -222,13 +222,13 @@ class CheckHostAPI:
                     return {'error': f"API request failed after retries: {str(e)}"}
                 time.sleep(2)
     
-    def check_tcp(self, host: str, port: int, nodes: List[str] = None) -> Dict:
+    def check_tcp(self, host: str, nodes: List[str] = None) -> Dict:
         """Perform TCP check from multiple nodes."""
         if nodes is None:
             nodes = list(NODE_DETAILS.keys())
         
         params = {
-            'host': f"{host}:{port}",
+            'host': host,
             'node': nodes
         }
         
@@ -254,13 +254,13 @@ class CheckHostAPI:
                     return {'error': f"API request failed after retries: {str(e)}"}
                 time.sleep(2)
     
-    def check_udp(self, host: str, port: int, nodes: List[str] = None) -> Dict:
+    def check_udp(self, host: str, nodes: List[str] = None) -> Dict:
         """Perform UDP check from multiple nodes."""
         if nodes is None:
             nodes = list(NODE_DETAILS.keys())
         
         params = {
-            'host': f"{host}:{port}",
+            'host': host,
             'node': nodes
         }
         
@@ -442,18 +442,17 @@ class NetworkTester:
         
         return results
 
-    def tcp_check(self, host: str, port: int) -> Dict[str, Dict]:
+    def tcp_check(self, host: str) -> Dict[str, Dict]:
         """
-        Perform a global TCP check to the specified host and port using all Check-Host nodes.
+        Perform a global TCP check to the specified host using all Check-Host nodes.
         
         Args:
             host: Hostname or IP address
-            port: TCP port number
             
         Returns:
             Dictionary with TCP results from all nodes
         """
-        api_result = self.check_host_api.check_tcp(host, port)
+        api_result = self.check_host_api.check_tcp(host)
         
         if 'error' in api_result:
             return {'error': api_result['error']}
@@ -488,18 +487,17 @@ class NetworkTester:
         
         return results
 
-    def udp_check(self, host: str, port: int) -> Dict[str, Dict]:
+    def udp_check(self, host: str) -> Dict[str, Dict]:
         """
-        Perform a UDP check to the specified host and port from multiple locations.
+        Perform a UDP check to the specified host from multiple locations.
         
         Args:
             host: Hostname or IP address
-            port: UDP port number
             
         Returns:
             Dictionary with UDP results from multiple locations
         """
-        api_result = self.check_host_api.check_udp(host, port)
+        api_result = self.check_host_api.check_udp(host)
         
         if 'error' in api_result:
             return {'error': api_result['error']}
@@ -687,9 +685,9 @@ def display_http_results(results: Dict) -> None:
         print(f"{location:<30} {status:<10} {code:<15} {time_ms:<15} {ip:<15}")
 
 
-def display_tcp_results(results: Dict, port: int) -> None:
+def display_tcp_results(results: Dict) -> None:
     """Display TCP results in a formatted way."""
-    print(f"\n{Fore.CYAN}TCP PORT {port} RESULTS:{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}TCP RESULTS:{Style.RESET_ALL}")
     print(f"{'Location':<30} {'Status':<10} {'Connect Time':<15} {'IP':<15}")
     print("-" * 80)
     
@@ -711,9 +709,9 @@ def display_tcp_results(results: Dict, port: int) -> None:
         print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
 
 
-def display_udp_results(results: Dict, port: int) -> None:
+def display_udp_results(results: Dict) -> None:
     """Display UDP results in a formatted way."""
-    print(f"\n{Fore.CYAN}UDP PORT {port} RESULTS:{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}UDP RESULTS:{Style.RESET_ALL}")
     print(f"{'Location':<30} {'Status':<10} {'Response Time':<15} {'IP':<15}")
     print("-" * 80)
     
@@ -809,15 +807,13 @@ def interactive_mode():
                 
         elif choice == '3':
             host = input("Enter host: ")
-            port = int(input("Enter TCP port: "))
-            results = tester.tcp_check(host, port)
-            display_tcp_results(results, port)
+            results = tester.tcp_check(host)
+            display_tcp_results(results)
                 
         elif choice == '4':
             host = input("Enter host: ")
-            port = int(input("Enter UDP port: "))
-            results = tester.udp_check(host, port)
-            display_udp_results(results, port)
+            results = tester.udp_check(host)
+            display_udp_results(results)
                 
         elif choice == '5':
             domain = input("Enter domain to resolve: ")
@@ -858,17 +854,15 @@ def main():
                            help='Output format')
 
     # TCP command
-    tcp_parser = subparsers.add_parser('tcp', help='Perform TCP port test')
+    tcp_parser = subparsers.add_parser('tcp', help='Perform TCP test')
     tcp_parser.add_argument('host', help='Host to test')
-    tcp_parser.add_argument('port', type=int, help='TCP port to test')
     tcp_parser.add_argument('-o', '--output', help='Output file to save results')
     tcp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
     # UDP command
-    udp_parser = subparsers.add_parser('udp', help='Perform UDP port test')
+    udp_parser = subparsers.add_parser('udp', help='Perform UDP test')
     udp_parser.add_argument('host', help='Host to test')
-    udp_parser.add_argument('port', type=int, help='UDP port to test')
     udp_parser.add_argument('-o', '--output', help='Output file to save results')
     udp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
@@ -900,12 +894,12 @@ def main():
             display_http_results(results)
                 
         elif args.command == 'tcp':
-            results = tester.tcp_check(args.host, args.port)
-            display_tcp_results(results, args.port)
+            results = tester.tcp_check(args.host)
+            display_tcp_results(results)
                 
         elif args.command == 'udp':
-            results = tester.udp_check(args.host, args.port)
-            display_udp_results(results, args.port)
+            results = tester.udp_check(args.host)
+            display_udp_results(results)
                 
         elif args.command == 'dns':
             results = tester.dns_check(args.domain, args.server)
