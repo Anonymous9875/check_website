@@ -5,8 +5,8 @@ Network Diagnostic Tool
 A comprehensive network testing utility that performs:
 - Ping tests
 - HTTP checks
-- TCP port checks
-- UDP port checks
+- TCP connectivity checks
+- UDP connectivity checks
 - DNS resolution tests
 Using both local system checks and the Check-Host API for global testing.
 """
@@ -38,7 +38,7 @@ MAX_RETRIES = 3  # Max retries for API checks
 RESULT_WAIT_TIME = 10  # Initial wait time for results
 MAX_WAIT_TIME = 30  # Max total wait time for results
 
-# Node data organized by continent
+# Node data organized by continent (unchanged)
 NODES_BY_CONTINENT = {
     "EU": [
         "bg1.node.check-host.net", "ch1.node.check-host.net", "cz1.node.check-host.net",
@@ -69,7 +69,7 @@ NODES_BY_CONTINENT = {
     ]
 }
 
-# Node details mapping
+# Node details mapping (unchanged)
 NODE_DETAILS = {
     "bg1.node.check-host.net": {"country": "Bulgaria", "city": "Sofia", "continent": "EU"},
     "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
@@ -145,7 +145,6 @@ class CheckHostAPI:
                 
                 result_data = response.json()
                 
-                # Check if all nodes have responded
                 if all(v is not None for v in result_data.values()):
                     return result_data
                 
@@ -165,7 +164,7 @@ class CheckHostAPI:
         
         params = {
             'host': host,
-            'node': nodes
+            'node': ','.join(nodes)  # Join nodes with commas
         }
         
         for attempt in range(MAX_RETRIES):
@@ -197,7 +196,7 @@ class CheckHostAPI:
         
         params = {
             'host': url,
-            'node': nodes
+            'node': ','.join(nodes)
         }
         
         for attempt in range(MAX_RETRIES):
@@ -223,13 +222,13 @@ class CheckHostAPI:
                 time.sleep(2)
     
     def check_tcp(self, host: str, nodes: List[str] = None) -> Dict:
-        """Perform TCP check from multiple nodes."""
+        """Perform TCP connectivity check from multiple nodes."""
         if nodes is None:
             nodes = list(NODE_DETAILS.keys())
         
         params = {
-            'host': host,
-            'node': nodes
+            'host': host,  # No port specified, assuming API handles common ports
+            'node': ','.join(nodes)
         }
         
         for attempt in range(MAX_RETRIES):
@@ -255,13 +254,13 @@ class CheckHostAPI:
                 time.sleep(2)
     
     def check_udp(self, host: str, nodes: List[str] = None) -> Dict:
-        """Perform UDP check from multiple nodes."""
+        """Perform UDP connectivity check from multiple nodes."""
         if nodes is None:
             nodes = list(NODE_DETAILS.keys())
         
         params = {
-            'host': host,
-            'node': nodes
+            'host': host,  # No port specified, assuming API handles common ports
+            'node': ','.join(nodes)
         }
         
         for attempt in range(MAX_RETRIES):
@@ -284,7 +283,6 @@ class CheckHostAPI:
             except requests.exceptions.RequestException as e:
                 if attempt == MAX_RETRIES - 1:
                     return {'error': f"API request failed after retries: {str(e)}"}
-               自主
                 time.sleep(2)
     
     def check_dns(self, domain: str, nodes: List[str] = None) -> Dict:
@@ -294,7 +292,7 @@ class CheckHostAPI:
         
         params = {
             'host': domain,
-            'node': nodes
+            'node': ','.join(nodes)
         }
         
         for attempt in range(MAX_RETRIES):
@@ -342,7 +340,7 @@ class NetworkTester:
         return 'ping'
 
     def ping(self, host: str, count: int = PING_COUNT) -> Dict[str, Dict]:
-        """Perform a global ping test to the specified host using all Check-Host nodes."""
+        """Perform a global ping test to the specified host."""
         api_result = self.check_host_api.check_ping(host)
         
         if 'error' in api_result:
@@ -369,20 +367,14 @@ class NetworkTester:
                             'ip': ping_result[0][2] if len(ping_result[0]) > 2 else None
                         }
                     else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid ping response'
-                        }
+                        results[region] = {'success': False, 'error': 'Invalid ping response'}
                 else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No ping data'
-                    }
+                    results[region] = {'success': False, 'error': 'No ping data'}
         
         return results
 
     def http_check(self, url: str) -> Dict[str, Dict]:
-        """Perform a global HTTP check to the specified URL using all Check-Host nodes."""
+        """Perform a global HTTP check to the specified URL."""
         if not url.startswith(('http://', 'https://')):
             url = f'http://{url}'
 
@@ -413,20 +405,14 @@ class NetworkTester:
                             'ip': ip
                         }
                     else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid HTTP response'
-                        }
+                        results[region] = {'success': False, 'error': 'Invalid HTTP response'}
                 else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No HTTP data'
-                    }
+                    results[region] = {'success': False, 'error': 'No HTTP data'}
         
         return results
 
     def tcp_check(self, host: str) -> Dict[str, Dict]:
-        """Perform a global TCP check to the specified host using all Check-Host nodes."""
+        """Perform a global TCP connectivity check to the specified host."""
         api_result = self.check_host_api.check_tcp(host)
         
         if 'error' in api_result:
@@ -450,20 +436,14 @@ class NetworkTester:
                             'ip': ip
                         }
                     else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid TCP response'
-                        }
+                        results[region] = {'success': False, 'error': 'Invalid TCP response'}
                 else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No TCP data'
-                    }
+                    results[region] = {'success': False, 'error': 'No TCP data'}
         
         return results
 
     def udp_check(self, host: str) -> Dict[str, Dict]:
-        """Perform a UDP check to the specified host from multiple locations."""
+        """Perform a global UDP connectivity check to the specified host."""
         api_result = self.check_host_api.check_udp(host)
         
         if 'error' in api_result:
@@ -487,20 +467,14 @@ class NetworkTester:
                             'ip': ip
                         }
                     else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid UDP response'
-                        }
+                        results[region] = {'success': False, 'error': 'Invalid UDP response'}
                 else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No UDP data'
-                    }
+                    results[region] = {'success': False, 'error': 'No UDP data'}
         
         return results
 
     def dns_check(self, domain: str, dns_server: str = None) -> Dict[str, Dict]:
-        """Perform a DNS resolution check for the specified domain from multiple locations."""
+        """Perform a DNS resolution check for the specified domain."""
         if dns_server:
             return self._single_dns_check(domain, dns_server)
         else:
@@ -517,9 +491,9 @@ class NetworkTester:
                     if node_result and isinstance(node_result, list) and len(node_result) > 0:
                         dns_result = node_result[0]
                         if isinstance(dns_result, list) and len(dns_result) > 1:
-                            success = dns_result[0] == 1
-                            resolution_time = dns_result[1] * 1000  # Convert to ms
-                            addresses = dns_result[2] if len(dns_result) > 2 else []
+                            success = True
+                            resolution_time = dns_result[0] * 1000  # Convert to ms
+                            addresses = dns_result[1] if len(dns_result) > 1 else []
                             
                             results[region] = {
                                 'success': success,
@@ -527,20 +501,14 @@ class NetworkTester:
                                 'addresses': addresses
                             }
                         else:
-                            results[region] = {
-                                'success': False,
-                                'error': 'Invalid DNS response'
-                            }
+                            results[region] = {'success': False, 'error': 'Invalid DNS response'}
                     else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'No DNS data'
-                        }
+                        results[region] = {'success': False, 'error': 'No DNS data'}
             
             return results
 
     def _single_dns_check(self, domain: str, dns_server: str) -> Dict[str, Union[bool, float, str, list]]:
-        """Perform a single DNS resolution check for the specified domain."""
+        """Perform a single DNS resolution check."""
         result = {
             'success': False,
             'resolution_time': 0.0,
@@ -573,7 +541,6 @@ class NetworkTester:
 
         return result
 
-
 def display_ping_results(results: Dict) -> None:
     """Display ping results in a formatted way."""
     print(f"\n{Fore.CYAN}PING RESULTS:{Style.RESET_ALL}")
@@ -589,16 +556,10 @@ def display_ping_results(results: Dict) -> None:
         else:
             status = f"{Fore.GREEN}UP{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}DOWN{Style.RESET_ALL}"
             packet_loss = f"{data.get('packet_loss', 0):.1f}%"
-            
-            if data.get('success'):
-                latency = f"{data.get('min_latency', 0):.1f}/{data.get('avg_latency', 0):.1f}/{data.get('max_latency', 0):.1f} ms"
-                ip = data.get('ip', 'N/A')
-            else:
-                latency = "N/A"
-                ip = "N/A"
+            latency = f"{data.get('min_latency', 0):.1f}/{data.get('avg_latency', 0):.1f}/{data.get('max_latency', 0):.1f} ms" if data.get('success') else "N/A"
+            ip = data.get('ip', 'N/A')
         
         print(f"{location:<30} {status:<10} {packet_loss:<15} {latency:<25} {ip:<15}")
-
 
 def display_http_results(results: Dict) -> None:
     """Display HTTP results in a formatted way."""
@@ -613,19 +574,12 @@ def display_http_results(results: Dict) -> None:
             time_ms = data['error']
             ip = "N/A"
         else:
-            if data.get('success'):
-                status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
-                code = f"{data.get('status_code', 'N/A')} {data.get('status_msg', '')}"
-                time_ms = f"{data.get('response_time', 0):.1f} ms"
-                ip = data.get('ip', 'N/A')
-            else:
-                status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
-                code = "N/A"
-                time_ms = "N/A"
-                ip = "N/A"
+            status = f"{Fore.GREEN}UP{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}DOWN{Style.RESET_ALL}"
+            code = f"{data.get('status_code', 'N/A')} {data.get('status_msg', '')}" if data.get('success') else "N/A"
+            time_ms = f"{data.get('response_time', 0):.1f} ms" if data.get('success') else "N/A"
+            ip = data.get('ip', 'N/A')
         
         print(f"{location:<30} {status:<10} {code:<15} {time_ms:<15} {ip:<15}")
-
 
 def display_tcp_results(results: Dict) -> None:
     """Display TCP results in a formatted way."""
@@ -639,17 +593,11 @@ def display_tcp_results(results: Dict) -> None:
             time_ms = data['error']
             ip = "N/A"
         else:
-            if data.get('success'):
-                status = f"{Fore.GREEN}OPEN{Style.RESET_ALL}"
-                time_ms = f"{data.get('connect_time', 0):.1f} ms"
-                ip = data.get('ip', 'N/A')
-            else:
-                status = f"{Fore.RED}CLOSED{Style.RESET_ALL}"
-                time_ms = "N/A"
-                ip = "N/A"
+            status = f"{Fore.GREEN}OPEN{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}CLOSED{Style.RESET_ALL}"
+            time_ms = f"{data.get('connect_time', 0):.1f} ms" if data.get('success') else "N/A"
+            ip = data.get('ip', 'N/A')
         
         print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
-
 
 def display_udp_results(results: Dict) -> None:
     """Display UDP results in a formatted way."""
@@ -663,17 +611,11 @@ def display_udp_results(results: Dict) -> None:
             time_ms = data['error']
             ip = "N/A"
         else:
-            if data.get('success'):
-                status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
-                time_ms = f"{data.get('response_time', 0):.1f} ms" if 'response_time' in data else "No response"
-                ip = data.get('ip', 'N/A')
-            else:
-                status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
-                time_ms = "N/A"
-                ip = "N/A"
+            status = f"{Fore.GREEN}UP{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}DOWN{Style.RESET_ALL}"
+            time_ms = f"{data.get('response_time', 0):.1f} ms" if data.get('success') and 'response_time' in data else "N/A"
+            ip = data.get('ip', 'N/A')
         
         print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
-
 
 def display_dns_results(results: Dict) -> None:
     """Display DNS results in a formatted way."""
@@ -687,17 +629,11 @@ def display_dns_results(results: Dict) -> None:
             time_ms = "N/A"
             addresses = data['error']
         else:
-            if data.get('success'):
-                status = f"{Fore.GREEN}OK{Style.RESET_ALL}"
-                time_ms = f"{data.get('resolution_time', 0):.1f} ms"
-                addresses = ", ".join(data.get('addresses', []))[:30]
-            else:
-                status = f"{Fore.RED}FAIL{Style.RESET_ALL}"
-                time_ms = "N/A"
-                addresses = data.get('error', 'Unknown error')
+            status = f"{Fore.GREEN}OK{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}FAIL{Style.RESET_ALL}"
+            time_ms = f"{data.get('resolution_time', 0):.1f} ms" if data.get('success') else "N/A"
+            addresses = ", ".join(data.get('addresses', []))[:30] if data.get('success') else "N/A"
         
         print(f"{location:<30} {status:<10} {time_ms:<20} {addresses:<30}")
-
 
 def save_results(results: Dict, filename: str, format: str = 'json') -> None:
     """Save results to a file in the specified format."""
@@ -716,9 +652,8 @@ def save_results(results: Dict, filename: str, format: str = 'json') -> None:
     except Exception as e:
         print(f"{Fore.RED}Error saving results: {e}{Style.RESET_ALL}")
 
-
 def interactive_mode():
-    """Run in interactive mode."""
+    """Run in interactive mode with colored menu."""
     tester = NetworkTester()
     
     print(f"{Fore.CYAN}=== Network Diagnostic Tool ==={Style.RESET_ALL}")
@@ -727,8 +662,8 @@ def interactive_mode():
         print("\nOptions:")
         print(f"{Fore.GREEN}1. Ping test{Style.RESET_ALL}")
         print(f"{Fore.YELLOW}2. HTTP test{Style.RESET_ALL}")
-        print(f"{Fore.BLUE}3. TCP test{Style.RESET_ALL}")
-        print(f"{Fore.MAGENTA}4. UDP test{Style.RESET_ALL}")
+        print(f"{Fore.BLUE}3. TCP connectivity test{Style.RESET_ALL}")
+        print(f"{Fore.MAGENTA}4. UDP connectivity test{Style.RESET_ALL}")
         print(f"{Fore.CYAN}5. DNS resolution test{Style.RESET_ALL}")
         print(f"{Fore.RED}0. Exit{Style.RESET_ALL}")
         
@@ -772,12 +707,12 @@ def interactive_mode():
             format = input("Format (json/text): ").lower() or 'json'
             save_results(results, filename, format)
 
-
 def main():
     """Main function to handle command line arguments."""
     parser = argparse.ArgumentParser(description='Network Diagnostic Tool')
     subparsers = parser.add_subparsers(dest='command', required=False)
 
+    # Ping command
     ping_parser = subparsers.add_parser('ping', help='Perform ping test')
     ping_parser.add_argument('host', help='Host to ping')
     ping_parser.add_argument('-c', '--count', type=int, default=PING_COUNT, 
@@ -786,24 +721,28 @@ def main():
     ping_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
+    # HTTP command
     http_parser = subparsers.add_parser('http', help='Perform HTTP test')
     http_parser.add_argument('url', help='URL to test')
     http_parser.add_argument('-o', '--output', help='Output file to save results')
     http_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
-    tcp_parser = subparsers.add_parser('tcp', help='Perform TCP test')
+    # TCP command
+    tcp_parser = subparsers.add_parser('tcp', help='Perform TCP connectivity test')
     tcp_parser.add_argument('host', help='Host to test')
     tcp_parser.add_argument('-o', '--output', help='Output file to save results')
     tcp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
-    udp_parser = subparsers.add_parser('udp', help='Perform UDP test')
+    # UDP command
+    udp_parser = subparsers.add_parser('udp', help='Perform UDP connectivity test')
     udp_parser.add_argument('host', help='Host to test')
     udp_parser.add_argument('-o', '--output', help='Output file to save results')
     udp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
+    # DNS command
     dns_parser = subparsers.add_parser('dns', help='Perform DNS resolution test')
     dns_parser.add_argument('domain', help='Domain to resolve')
     dns_parser.add_argument('-s', '--server', 
@@ -847,7 +786,6 @@ def main():
     except Exception as e:
         print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
         sys.exit(1)
-
 
 if __name__ == '__main__':
     try:
