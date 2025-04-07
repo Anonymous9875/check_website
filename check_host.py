@@ -5,6 +5,8 @@ Network Diagnostic Tool
 A comprehensive network testing utility that performs:
 - Ping tests
 - HTTP checks
+- TCP port checks
+- UDP port checks
 - DNS resolution tests
 Using both local system checks and the Check-Host API for global testing.
 """
@@ -220,6 +222,70 @@ class CheckHostAPI:
                     return {'error': f"API request failed after retries: {str(e)}"}
                 time.sleep(2)
     
+    def check_tcp(self, host: str, nodes: List[str] = None) -> Dict:
+        """Perform TCP check from multiple nodes."""
+        if nodes is None:
+            nodes = list(NODE_DETAILS.keys())
+        
+        params = {
+            'host': host,
+            'node': nodes
+        }
+        
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.session.get(
+                    f"{self.BASE_URL}/check-tcp",
+                    params=params,
+                    timeout=DEFAULT_TIMEOUT
+                )
+                response.raise_for_status()
+                
+                check_id = response.json().get('request_id')
+                if not check_id:
+                    if attempt == MAX_RETRIES - 1:
+                        return {'error': 'No check ID received after retries'}
+                    continue
+                
+                return self._get_check_results(check_id)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == MAX_RETRIES - 1:
+                    return {'error': f"API request failed after retries: {str(e)}"}
+                time.sleep(2)
+    
+    def check_udp(self, host: str, nodes: List[str] = None) -> Dict:
+        """Perform UDP check from multiple nodes."""
+        if nodes is None:
+            nodes = list(NODE_DETAILS.keys())
+        
+        params = {
+            'host': host,
+            'node': nodes
+        }
+        
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.session.get(
+                    f"{self.BASE_URL}/check-udp",
+                    params=params,
+                    timeout=DEFAULT_TIMEOUT
+                )
+                response.raise_for_status()
+                
+                check_id = response.json().get('request_id')
+                if not check_id:
+                    if attempt == MAX_RETRIES - 1:
+                        return {'error': 'No check ID received after retries'}
+                    continue
+                
+                return self._get_check_results(check_id)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == MAX_RETRIES - 1:
+                    return {'error': f"API request failed after retries: {str(e)}"}
+               STI time.sleep(2)
+    
     def check_dns(self, domain: str, nodes: List[str] = None) -> Dict:
         """Perform DNS check from multiple nodes."""
         if nodes is None:
@@ -376,132 +442,144 @@ class NetworkTester:
         
         return results
 
-    def ping_check_alternative(self, host: str) -> Dict[str, Dict]:
+    def tcp_check(self, host: str) -> Dict[str, Dict]:
         """
-        Perform an alternative global ping test to the specified host using all Check-Host nodes.
+        Perform a global TCP check to the specified host using all Check-Host nodes.
         
         Args:
-            host: Hostname or IP address to ping
+            host: Hostname or IP address
             
         Returns:
-            Dictionary with ping results from all nodes
+            Dictionary with TCP results from all nodes
         """
-        return self.ping(host)  # Using the same ping method with Check-Host API
-
-    def http_check_alternative(self, url: str) -> Dict[str, Dict]:
-        """
-        Perform an alternative global HTTP check to the specified URL using all Check-Host nodes.
+        api_result = self.check_host_api.check_tcp(host)
         
-        Args:
-            url: URL to check (must include http:// or https://)
-            
-        Returns:
-            Dictionary with HTTP results from all nodes
-        """
-        return self.http_check(url)  # Using the same HTTP method with Check-Host API
-
-    def dns_check(self, domain: str, dns_server: str = None) -> Dict[str, Dict]:
-        """
-        Perform a DNS resolution check for the specified domain from multiple locations.
+        if 'error' in api_result:
+            return {'error': api_result['error']}
         
-        Args:
-            domain: Domain name to resolve
-            dns_server: DNS server to use (if None, will use Check-Host nodes)
-            
-        Returns:
-            Dictionary with DNS results from multiple locations
-        """
-        if dns_server:
-            # Single DNS check if server is specified
-            return self._single_dns_check(domain, dns_server)
-        else:
-            # Global DNS check using Check-Host API
-            api_result = self.check_host_api.check_dns(domain)
-            
-            if 'error' in api_result:
-                return {'error': api_result['error']}
-            
-            results = {}
-            for node, node_result in api_result.items():
-                if node in NODE_DETAILS:
-                    region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
-                    
-                    if node_result and isinstance(node_result, list) and len(node_result) > 0:
-                        dns_result = node_result[0]
-                        if isinstance(dns_result, list) and len(dns_result) > 0:
-                            addresses = dns_result[0].split('\n') if dns_result[0] else []
-                            success = bool(addresses and addresses[0])
-                            time_ms = float(dns_result[1]) * 1000 if len(dns_result) > 1 and dns_result[1] else 0
-                            
-                            results[region] = {
-                                'success': success,
-                                'resolution_time': time_ms,
-                                'addresses': addresses,
-                                'error': None if success else 'No DNS records found'
-                            }
-                        else:
-                            results[region] = {
-                                'success': False,
-                                'error': 'Invalid DNS response'
-                            }
+        results = {}
+        for node, node_result in api_result.items():
+            if node in NODE_DETAILS:
+                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
+                
+                if node_result and isinstance(node_result, list) and len(node_result) > 0:
+                    tcp_result = node_result[0]
+                    if isinstance(tcp_result, list) and len(tcp_result) > 1:
+                        success = tcp_result[0] == 1
+                        connect_time = tcp_result[1] * 1000  # Convert to ms
+                        ip = tcp_result[2] if len(tcp_result) > 2 else None
+                        
+                        results[region] = {
+                            'success': success,
+                            'connect_time': connect_time,
+                            'ip': ip
+                        }
                     else:
                         results[region] = {
                             'success': False,
-                            'error': 'No DNS data'
+                            'error': 'Invalid TCP response'
                         }
-            
-            return results
+                else:
+                    results[region] = {
+                        'success': False,
+                        'error': 'No TCP data'
+                    }
+        
+        return results
 
-    def _single_dns_check(self, domain: str, dns_server: str) -> Dict[str, Union[bool, float, str, list]]:
+    def udp_check(self, host: str) -> Dict[str, Dict]:
         """
-        Perform a single DNS resolution check for the specified domain.
+        Perform a global UDP check to the specified host using all Check-Host nodes.
+        
+        Args:
+            host: Hostname or IP address
+            
+        Returns:
+            Dictionary with UDP results from all nodes
+        """
+        api_result = self.check_host_api.check_udp(host)
+        
+        if 'error' in api_result:
+            return {'error': api_result['error']}
+        
+        results = {}
+        for node, node_result in api_result.items():
+            if node in NODE_DETAILS:
+                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['cities']})"
+                
+                if node_result and isinstance(node_result, list) and len(node_result) > 0:
+                    udp_result = node_result[0]
+                    if isinstance(udp_result, list) and len(udp_result) > 1:
+                        success = udp_result[0] == 1
+                        response_time = udp_result[1] * 1000  # Convert to ms
+                        ip = udp_result[2] if len(udp_result) > 2 else None
+                        
+                        results[region] = {
+                            'success': success,
+                            'response_time': response_time,
+                            'ip': ip
+                        }
+                    else:
+                        results[region] = {
+                            'success': False,
+                            'error': 'Invalid UDP response'
+                        }
+                else:
+                    results[region] = {
+                        'success': False,
+                        'error': 'No UDP data'
+                    }
+        
+        return results
+
+    def dns_check(self, domain: str) -> Dict[str, Dict]:
+        """
+        Perform a global DNS resolution check for the specified domain using all Check-Host nodes.
         
         Args:
             domain: Domain name to resolve
-            dns_server: DNS server to use
             
         Returns:
-            Dictionary with DNS results including:
-            - success: bool
-            - resolution_time: float (in ms)
-            - addresses: list of resolved IPs
-            - error: str (if any)
+            Dictionary with DNS results from all nodes
         """
-        result = {
-            'success': False,
-            'resolution_time': 0.0,
-            'addresses': [],
-            'error': None
-        }
+        api_result = self.check_host_api.check_dns(domain)
+        
+        if 'error' in api_result:
+            return {'error': api_result['error']}
+        
+        results = {}
+        for node, node_result in api_result.items():
+            if node in NODE_DETAILS:
+                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
+                
+                if node_result and isinstance(node_result, list) and len(node_result) > 0:
+                    dns_result = node_result[0]
+                    if isinstance(dns_result, list) and len(dns_result) > 0:
+                        success = True
+                        addresses = [record[1] for record in dns_result if len(record) > 1]
+                        resolution_time = dns_result[0][0] * 1000 if dns_result[0][0] else 0  # Convert to ms
+                        
+                        results[region] = {
+                            'success': success,
+                            'resolution_time': resolution_time,
+                            'addresses': addresses
+                        }
+                    else:
+                        results[region] = {
+                            'success': False,
+                            'error': 'Invalid DNS response'
+                        }
+                else:
+                    results[region] = {
+                        'success': False,
+                        'error': 'No DNS data'
+                    }
+        
+        return results
 
-        try:
-            resolver = dns.resolver.Resolver()
-            resolver.nameservers = [dns_server]
-            resolver.timeout = self.timeout
-            resolver.lifetime = self.timeout
-
-            start_time = time.time()
-            answers = resolver.resolve(domain, 'A')
-            end_time = time.time()
-
-            result['resolution_time'] = (end_time - start_time) * 1000  # Convert to ms
-            result['addresses'] = [str(r) for r in answers]
-            result['success'] = True
-
-        except dns.resolver.NXDOMAIN:
-            result['error'] = "Domain does not exist"
-        except dns.resolver.Timeout:
-            result['error'] = "DNS resolution timed out"
-        except dns.resolver.NoNameservers:
-            result['error'] = "No nameservers available"
-        except Exception as e:
-            result['error'] = f"DNS error: {str(e)}"
-
-        return result
-
-def display_ping_results(results: Dict, title: str = "PING RESULTS") -> None:
+def display_ping_results(results: Dict) -> None:
     """Display ping results in a formatted way."""
-    print(f"\n{Fore.CYAN}{title}:{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}PING RESULTS:{Style.RESET_ALL}")
     print(f"{'Location':<30} {'Status':<10} {'Packet Loss':<15} {'Latency (min/avg/max)':<25} {'IP':<15}")
     print("-" * 80)
     
@@ -524,9 +602,9 @@ def display_ping_results(results: Dict, title: str = "PING RESULTS") -> None:
         
         print(f"{location:<30} {status:<10} {packet_loss:<15} {latency:<25} {ip:<15}")
 
-def display_http_results(results: Dict, title: str = "HTTP RESULTS") -> None:
+def display_http_results(results: Dict) -> None:
     """Display HTTP results in a formatted way."""
-    print(f"\n{Fore.CYAN}{title}:{Style.RESET_ALL}")
+    print(f"\n{Fore.CYAN}HTTP RESULTS:{Style.RESET_ALL}")
     print(f"{'Location':<30} {'Status':<10} {'Response Code':<15} {'Response Time':<15} {'IP':<15}")
     print("-" * 80)
     
@@ -550,6 +628,52 @@ def display_http_results(results: Dict, title: str = "HTTP RESULTS") -> None:
         
         print(f"{location:<30} {status:<10} {code:<15} {time_ms:<15} {ip:<15}")
 
+def display_tcp_results(results: Dict) -> None:
+    """Display TCP results in a formatted way."""
+    print(f"\n{Fore.CYAN}TCP RESULTS:{Style.RESET_ALL}")
+    print(f"{'Location':<30} {'Status':<10} {'Connect Time':<15} {'IP':<15}")
+    print("-" * 80)
+    
+    for location, data in results.items():
+        if 'error' in data:
+            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
+            time_ms = data['error']
+            ip = "N/A"
+        else:
+            if data.get('success'):
+                status = f"{Fore.GREEN}OPEN{Style.RESET_ALL}"
+                time_ms = f"{data.get('connect_time', 0):.1f} ms"
+                ip = data.get('ip', 'N/A')
+            else:
+                status = f"{Fore.RED}CLOSED{Style.RESET_ALL}"
+                time_ms = "N/A"
+                ip = "N/A"
+        
+        print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
+
+def display_udp_results(results: Dict) -> None:
+    """Display UDP results in a formatted way."""
+    print(f"\n{Fore.CYAN}UDP RESULTS:{Style.RESET_ALL}")
+    print(f"{'Location':<30} {'Status':<10} {'Response Time':<15} {'IP':<15}")
+    print("-" * 80)
+    
+    for location, data in results.items():
+        if 'error' in data:
+            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
+            time_ms = data['error']
+            ip = "N/A"
+        else:
+            if data.get('success'):
+                status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
+                time_ms = f"{data.get('response_time', 0):.1f} ms"
+                ip = data.get('ip', 'N/A')
+            else:
+                status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
+                time_ms = "N/A"
+                ip = "N/A"
+        
+        print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
+
 def display_dns_results(results: Dict) -> None:
     """Display DNS results in a formatted way."""
     print(f"\n{Fore.CYAN}DNS RESULTS:{Style.RESET_ALL}")
@@ -569,7 +693,7 @@ def display_dns_results(results: Dict) -> None:
             else:
                 status = f"{Fore.RED}FAIL{Style.RESET_ALL}"
                 time_ms = "N/A"
-                addresses = data.get('error', 'Unknown error')
+                addresses = "N/A"
         
         print(f"{location:<30} {status:<10} {time_ms:<20} {addresses:<30}")
 
@@ -600,8 +724,8 @@ def interactive_mode():
         print("\nOptions:")
         print("1. Ping test")
         print("2. HTTP test")
-        print("3. Alternative Ping test")
-        print("4. Alternative HTTP test")
+        print("3. TCP test")
+        print("4. UDP test")
         print("5. DNS resolution test")
         print("0. Exit")
         
@@ -613,27 +737,26 @@ def interactive_mode():
         if choice == '1':
             host = input("Enter host to ping: ")
             results = tester.ping(host)
-            display_ping_results(results, "PING RESULTS")
+            display_ping_results(results)
             
         elif choice == '2':
             url = input("Enter URL to test (include http:// or https://): ")
             results = tester.http_check(url)
-            display_http_results(results, "HTTP RESULTS")
+            display_http_results(results)
                 
         elif choice == '3':
-            host = input("Enter host to ping: ")
-            results = tester.ping_check_alternative(host)
-            display_ping_results(results, "ALTERNATIVE PING RESULTS")
+            host = input("Enter host: ")
+            results = tester.tcp_check(host)
+            display_tcp_results(results)
                 
         elif choice == '4':
-            url = input("Enter URL to test (include http:// or https://): ")
-            results = tester.http_check_alternative(url)
-            display_http_results(results, "ALTERNATIVE HTTP RESULTS")
+            host = input("Enter host: ")
+            results = tester.udp_check(host)
+            display_udp_results(results)
                 
         elif choice == '5':
             domain = input("Enter domain to resolve: ")
-            dns_server = input("Enter DNS server (leave empty for global check): ") or None
-            results = tester.dns_check(domain, dns_server)
+            results = tester.dns_check(domain)
             display_dns_results(results)
                 
         else:
@@ -667,25 +790,23 @@ def main():
     http_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
-    # Alternative Ping command
-    ping_alt_parser = subparsers.add_parser('ping-alt', help='Perform alternative ping test')
-    ping_alt_parser.add_argument('host', help='Host to ping')
-    ping_alt_parser.add_argument('-o', '--output', help='Output file to save results')
-    ping_alt_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
+    # TCP command
+    tcp_parser = subparsers.add_parser('tcp', help='Perform TCP test')
+    tcp_parser.add_argument('host', help='Host to test')
+    tcp_parser.add_argument('-o', '--output', help='Output file to save results')
+    tcp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
-    # Alternative HTTP command
-    http_alt_parser = subparsers.add_parser('http-alt', help='Perform alternative HTTP test')
-    http_alt_parser.add_argument('url', help='URL to test')
-    http_alt_parser.add_argument('-o', '--output', help='Output file to save results')
-    http_alt_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
+    # UDP command
+    udp_parser = subparsers.add_parser('udp', help='Perform UDP test')
+    udp_parser.add_argument('host', help='Host to test')
+    udp_parser.add_argument('-o', '--output', help='Output file to save results')
+    udp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
     # DNS command
     dns_parser = subparsers.add_parser('dns', help='Perform DNS resolution test')
     dns_parser.add_argument('domain', help='Domain to resolve')
-    dns_parser.add_argument('-s', '--server', 
-                           help='DNS server to use (leave empty for global check)')
     dns_parser.add_argument('-o', '--output', help='Output file to save results')
     dns_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
@@ -701,22 +822,22 @@ def main():
     try:
         if args.command == 'ping':
             results = tester.ping(args.host, args.count)
-            display_ping_results(results, "PING RESULTS")
+            display_ping_results(results)
             
         elif args.command == 'http':
             results = tester.http_check(args.url)
-            display_http_results(results, "HTTP RESULTS")
+            display_http_results(results)
                 
-        elif args.command == 'ping-alt':
-            results = tester.ping_check_alternative(args.host)
-            display_ping_results(results, "ALTERNATIVE PING RESULTS")
+        elif args.command == 'tcp':
+            results = tester.tcp_check(args.host)
+            display_tcp_results(results)
                 
-        elif args.command == 'http-alt':
-            results = tester.http_check_alternative(args.url)
-            display_http_results(results, "ALTERNATIVE HTTP RESULTS")
+        elif args.command == 'udp':
+            results = tester.udp_check(args.host)
+            display_udp_results(results)
                 
         elif args.command == 'dns':
-            results = tester.dns_check(args.domain, args.server)
+            results = tester.dns_check(args.domain)
             display_dns_results(results)
         
         # Save results if requested
