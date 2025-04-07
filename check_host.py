@@ -499,82 +499,40 @@ class NetworkTester:
         Returns:
             Dictionary with UDP results from multiple locations
         """
+        api_result = self.check_host_api.check_udp(host, port)
+        
+        if 'error' in api_result:
+            return {'error': api_result['error']}
+        
         results = {}
-        
-        with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-            futures = {}
-            
-            for node in NODE_DETAILS:
+        for node, node_result in api_result.items():
+            if node in NODE_DETAILS:
                 region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
-                futures[executor.submit(self._single_udp_check, host, port, node)] = region
-            
-            for future in concurrent.futures.as_completed(futures):
-                region = futures[future]
-                try:
-                    results[region] = future.result()
-                except Exception as e:
-                    results[region] = {'error': str(e), 'success': False}
-
-        return results
-
-    def _single_udp_check(self, host: str, port: int, dns_server: str = None) -> Dict[str, Union[bool, float, str]]:
-        """
-        Perform a single UDP check to the specified host and port.
-        
-        Args:
-            host: Hostname or IP address
-            port: UDP port number
-            dns_server: DNS server to use for host resolution
-            
-        Returns:
-            Dictionary with UDP results including:
-            - success: bool
-            - response_time: float (in ms, if available)
-            - error: str (if any)
-        """
-        result = {
-            'success': False,
-            'error': None
-        }
-
-        try:
-            # Resolve host if needed
-            if dns_server:
-                resolver = dns.resolver.Resolver()
-                resolver.nameservers = [dns_server]
-                resolver.timeout = self.timeout
-                resolver.lifetime = self.timeout
-                answers = resolver.resolve(host, 'A')
-                target_ip = str(answers[0])
-            else:
-                target_ip = host
-
-            sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            sock.settimeout(self.timeout)
-            
-            # Send a simple message
-            message = b'PING'
-            start_time = time.time()
-            sock.sendto(message, (target_ip, port))
-            
-            # Try to receive (though UDP is connectionless)
-            try:
-                data, addr = sock.recvfrom(1024)
-                end_time = time.time()
-                result['success'] = True
-                result['response_time'] = (end_time - start_time) * 1000  # Convert to ms
-            except socket.timeout:
-                # UDP is connectionless, so timeout doesn't necessarily mean failure
-                result['success'] = True
-                result['error'] = "No response (UDP is connectionless)"
                 
-        except Exception as e:
-            result['error'] = f"UDP error: {str(e)}"
-        finally:
-            if 'sock' in locals():
-                sock.close()
-
-        return result
+                if node_result and isinstance(node_result, list) and len(node_result) > 0:
+                    udp_result = node_result[0]
+                    if isinstance(udp_result, list) and len(udp_result) > 1:
+                        success = udp_result[0] == 1
+                        response_time = udp_result[1] * 1000  # Convert to ms
+                        ip = udp_result[2] if len(udp_result) > 2 else None
+                        
+                        results[region] = {
+                            'success': success,
+                            'response_time': response_time,
+                            'ip': ip
+                        }
+                    else:
+                        results[region] = {
+                            'success': False,
+                            'error': 'Invalid UDP response'
+                        }
+                else:
+                    results[region] = {
+                        'success': False,
+                        'error': 'No UDP data'
+                    }
+        
+        return results
 
     def dns_check(self, domain: str, dns_server: str = None) -> Dict[str, Dict]:
         """
@@ -591,23 +549,41 @@ class NetworkTester:
             # Single DNS check if server is specified
             return self._single_dns_check(domain, dns_server)
         else:
-            # Global DNS check using Check-Host nodes
-            results = {}
+            # Global DNS check using Check-Host API
+            api_result = self.check_host_api.check_dns(domain)
             
-            with concurrent.futures.ThreadPoolExecutor(max_workers=self.max_threads) as executor:
-                futures = {}
-                
-                for node in NODE_DETAILS:
+            if 'error' in api_result:
+                return {'error': api_result['error']}
+            
+            results = {}
+            for node, node_result in api_result.items():
+                if node in NODE_DETAILS:
                     region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
-                    futures[executor.submit(self._single_dns_check, domain, node)] = region
-                
-                for future in concurrent.futures.as_completed(futures):
-                    region = futures[future]
-                    try:
-                        results[region] = future.result()
-                    except Exception as e:
-                        results[region] = {'error': str(e), 'success': False}
-
+                    
+                    if node_result and isinstance(node_result, list) and len(node_result) > 0:
+                        dns_result = node_result[0]
+                        if isinstance(dns_result, list) and len(dns_result) > 1:
+                            success = dns_result[0] == 1
+                            resolution_time = dns_result[1] * 1000  # Convert to ms
+                            addresses = dns_result[2] if len(dns_result) > 2 else []
+                            
+                            results[region] = {
+                                'success': success,
+                                'resolution_time': resolution_time,
+                                'addresses': addresses,
+                                'error': None
+                            }
+                        else:
+                            results[region] = {
+                                'success': False,
+                                'error': 'Invalid DNS response'
+                            }
+                    else:
+                        results[region] = {
+                            'success': False,
+                            'error': 'No DNS data'
+                        }
+            
             return results
 
     def _single_dns_check(self, domain: str, dns_server: str) -> Dict[str, Union[bool, float, str, list]]:
@@ -634,7 +610,7 @@ class NetworkTester:
 
         try:
             resolver = dns.resolver.Resolver()
-            resolver.nameservers = [dns_server]
+            resolver.nameservers = [socket.gethostbyname(dns_server)]
             resolver.timeout = self.timeout
             resolver.lifetime = self.timeout
 
