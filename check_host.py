@@ -284,7 +284,7 @@ class CheckHostAPI:
             except requests.exceptions.RequestException as e:
                 if attempt == MAX_RETRIES - 1:
                     return {'error': f"API request failed after retries: {str(e)}"}
-               STI time.sleep(2)
+                time.sleep(2)
     
     def check_dns(self, domain: str, nodes: List[str] = None) -> Dict:
         """Perform DNS check from multiple nodes."""
@@ -505,7 +505,7 @@ class NetworkTester:
         results = {}
         for node, node_result in api_result.items():
             if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['cities']})"
+                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
                 
                 if node_result and isinstance(node_result, list) and len(node_result) > 0:
                     udp_result = node_result[0]
