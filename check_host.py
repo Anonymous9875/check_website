@@ -1,225 +1,199 @@
 #!/usr/bin/env python3
+
 import requests
 import json
 import time
-from typing import List, Dict, Optional, Union
+import sys
+import re
 
-class CheckHost:
-    def __init__(self):
-        self.headers = {
-            "Accept": "application/json"
-        }
-        self.base_url = "https://check-host.net"
-    
-    def get_nodes(self) -> List[Dict]:
-        """Obtiene la lista de nodos disponibles"""
-        url = f"{self.base_url}/nodes/hosts"
-        try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-            nodes_data = response.json()
-            
-            nodes_list = []
-            for node_name, node_info in nodes_data['nodes'].items():
-                nodes_list.append({
-                    "server": node_name,
-                    "address": node_info['ip'],
-                    "location": node_info['location'][2] if len(node_info['location']) > 2 else ""
-                })
-            return nodes_list
-        except Exception as e:
-            print(f"Error getting nodes: {e}")
-            return []
-    
-    def check_host(self, server: str, check_type: str, count: int = 5, node: Optional[str] = None) -> List[Dict]:
-        """Realiza una comprobación en el host especificado"""
-        nodes_list = self.get_nodes()
-        if not nodes_list:
-            print("No se pudo obtener la lista de nodos")
-            return []
+def check_nodes():
+    try:
+        response = requests.get("https://check-host.net/nodes/hosts", headers={"Accept": "application/json"})
+        nodes_data = response.json()
+        nodes = nodes_data.get("nodes", {})
         
-        url = f"{self.base_url}/check-{check_type}?host={server}&max_nodes={count}"
-        try:
-            response = requests.get(url, headers=self.headers)
-            response.raise_for_status()
-            request_data = response.json()
-            
-            request_id = request_data['request_id']
-            nodes = list(request_data['nodes'].keys())
-            
-            # Esperar a que los resultados estén listos
-            url_result = f"{self.base_url}/check-result/{request_id}"
-            while True:
-                time.sleep(2)  # Esperar 2 segundos entre comprobaciones
-                response = requests.get(url_result, headers=self.headers)
-                response.raise_for_status()
-                check_data = response.json()
-                
-                ready = all(check_data.get(node) is not None for node in nodes)
-                if ready:
-                    break
-            
-            # Procesar resultados según el tipo de comprobación
-            results = []
-            for node_name in nodes:
-                node_result = check_data.get(node_name, {})
-                node_info = next((n for n in nodes_list if n['server'] == node_name), {})
-                
-                if check_type == "ping":
-                    for ping_result in node_result[0]:
-                        results.append({
-                            "server": node_name,
-                            "location": node_info.get('location', ''),
-                            "status": ping_result[0],
-                            "time": ping_result[1]
-                        })
-                
-                elif check_type == "http":
-                    status = 'True' if node_result[0][0] == "1" else 'False'
-                    results.append({
-                        "server": node_name,
-                        "location": node_info.get('location', ''),
-                        "status": status,
-                        "time": node_result[0][1]
-                    })
-                
-                elif check_type == "dns":
-                    results.append({
-                        "server": node_name,
-                        "location": node_info.get('location', ''),
-                        "a_record": node_result.get('A', ''),
-                        "ttl": node_result.get('TTL', '')
-                    })
-                
-                elif check_type == "tcp":
-                    if 'error' in node_result:
-                        results.append({
-                            "server": node_name,
-                            "location": node_info.get('location', ''),
-                            "status": node_result['error']
-                        })
-                    else:
-                        results.append({
-                            "server": node_name,
-                            "location": node_info.get('location', ''),
-                            "status": node_result.get('time', '')
-                        })
-                
-                elif check_type == "udp":
-                    results.append({
-                        "server": node_name,
-                        "location": node_info.get('location', ''),
-                        "timeout": node_result.get('timeout', '')
-                    })
-            
-            return results
-        
-        except Exception as e:
-            print(f"Error checking host: {e}")
-            return []
+        result = []
+        for hostname, info in nodes.items():
+            location = info.get("location", [])
+            if len(location) >= 3:
+                result.append({"hostname": hostname, "location": location[2]})
+        return result
+    except Exception as e:
+        print(f"Error fetching nodes: {e}")
+        return None
 
-def print_results(results: List[Dict], check_type: str):
-    """Muestra los resultados formateados"""
-    if not results:
-        print("No se obtuvieron resultados")
-        return
-    
-    print("\nResultados:")
-    if check_type == "ping":
-        print(f"{'Servidor':<20} {'Ubicación':<25} {'Estado':<10} {'Tiempo (ms)':<10}")
-        print("-" * 70)
-        for r in results:
-            print(f"{r['server']:<20} {r['location']:<25} {str(r['status']):<10} {str(r['time']):<10}")
-    
-    elif check_type == "http":
-        print(f"{'Servidor':<20} {'Ubicación':<25} {'Estado':<10} {'Tiempo (ms)':<10}")
-        print("-" * 70)
-        for r in results:
-            print(f"{r['server']:<20} {r['location']:<25} {r['status']:<10} {str(r['time']):<10}")
-    
-    elif check_type == "dns":
-        print(f"{'Servidor':<20} {'Ubicación':<25} {'Registro A':<30} {'TTL':<10}")
-        print("-" * 90)
-        for r in results:
-            a_records = r['a_record'] if isinstance(r['a_record'], list) else [r['a_record']]
-            for a in a_records:
-                print(f"{r['server']:<20} {r['location']:<25} {str(a):<30} {str(r['ttl']):<10}")
-    
-    elif check_type == "tcp":
-        print(f"{'Servidor':<20} {'Ubicación':<25} {'Estado/Tiempo':<30}")
-        print("-" * 70)
-        for r in results:
-            print(f"{r['server']:<20} {r['location']:<25} {str(r['status']):<30}")
-    
-    elif check_type == "udp":
-        print(f"{'Servidor':<20} {'Ubicación':<25} {'Timeout':<10}")
-        print("-" * 70)
-        for r in results:
-            print(f"{r['server']:<20} {r['location']:<25} {str(r['timeout']):<10}")
+def perform_check(check_type, host, count=1, node=None):
+    try:
+        # Build the request URL
+        url = f"https://check-host.net/check-{check_type}?host={host}&max_nodes={count}"
+        if node:
+            url += f"&node={node}"
+        
+        # Make the initial request
+        response = requests.get(url, headers={"Accept": "application/json"})
+        if response.status_code != 200:
+            print(f"Error: Received status code {response.status_code}")
+            return None
+            
+        data = response.json()
+        request_id = data.get("request_id")
+        if not request_id:
+            print("Error: No request_id received")
+            return None
+        
+        # Poll for results
+        result_url = f"https://check-host.net/check-result/{request_id}"
+        while True:
+            result_response = requests.get(result_url, headers={"Accept": "application/json"})
+            if result_response.status_code != 200:
+                print(f"Error: Received status code {result_response.status_code} while polling results")
+                return None
+                
+            result_data = result_response.json()
+            if all(value is not None for value in result_data.values()):
+                break
+            time.sleep(0.1)
+        
+        return result_data
+    except Exception as e:
+        print(f"Error performing check: {e}")
+        return None
+
+def print_menu():
+    print("\nOptions:")
+    print("1. Ping test")
+    print("2. HTTP test")
+    print("3. TCP test")
+    print("4. UDP test")
+    print("5. DNS resolution test")
+    print("6. List available nodes")
+    print("0. Exit")
 
 def main():
-    checker = CheckHost()
-    
-    while True:
-        print("\nOptions:")
-        print("1. Ping test")
-        print("2. HTTP test")
-        print("3. TCP test")
-        print("4. UDP test")
-        print("5. DNS resolution test")
-        print("6. List available nodes")
-        print("0. Exit")
-        
-        try:
-            choice = input("Select an option (0-6): ")
+    if len(sys.argv) > 1:
+        # Command-line mode
+        if sys.argv[1] in ("-t", "--type"):
+            if len(sys.argv) < 3:
+                print("Invalid type.\nUse type: ping, dns, http, tcp, udp")
+                return
+                
+            check_type = sys.argv[2]
+            if check_type not in ("ping", "dns", "http", "tcp", "udp"):
+                print("Invalid type.\nUse type: ping, dns, http, tcp, udp")
+                return
+                
+            if len(sys.argv) < 4:
+                print("Invalid hostname.")
+                return
+                
+            host = sys.argv[3]
+            count = 1
+            node = None
+            
+            if len(sys.argv) > 4:
+                # Check if 4th argument is a count or node
+                if sys.argv[4].isdigit():
+                    count = int(sys.argv[4])
+                    if len(sys.argv) > 5:
+                        node = sys.argv[5]
+                else:
+                    node = sys.argv[4]
+            
+            result = perform_check(check_type, host, count, node)
+            if result:
+                print(json.dumps(result, indent=2))
+                
+        elif sys.argv[1] in ("-n", "--nodes"):
+            nodes = check_nodes()
+            if nodes:
+                for node in nodes:
+                    print(f"Hostname: {node['hostname']}")
+                    print(f"Location: {node['location']}")
+                    print("-" * 40)
+        else:
+            print("Invalid parameter.\nUse parameters: <-t|--type>, <-n|--nodes>")
+    else:
+        # Interactive menu mode
+        while True:
+            print_menu()
+            choice = input("Enter your choice: ")
             
             if choice == "0":
-                print("Saliendo...")
+                print("Exiting...")
                 break
-            
+            elif choice == "1":
+                host = input("Enter host to ping: ")
+                count = input("Enter number of nodes (default 1): ")
+                node = input("Enter specific node (leave blank for any): ")
+                
+                count = int(count) if count.isdigit() else 1
+                node = node if node else None
+                
+                result = perform_check("ping", host, count, node)
+                if result:
+                    print(json.dumps(result, indent=2))
+            elif choice == "2":
+                host = input("Enter URL to test (include http:// or https://): ")
+                count = input("Enter number of nodes (default 1): ")
+                node = input("Enter specific node (leave blank for any): ")
+                
+                count = int(count) if count.isdigit() else 1
+                node = node if node else None
+                
+                result = perform_check("http", host, count, node)
+                if result:
+                    print(json.dumps(result, indent=2))
+            elif choice == "3":
+                host = input("Enter host:port (e.g., example.com:443): ")
+                count = input("Enter number of nodes (default 1): ")
+                node = input("Enter specific node (leave blank for any): ")
+                
+                count = int(count) if count.isdigit() else 1
+                node = node if node else None
+                
+                result = perform_check("tcp", host, count, node)
+                if result:
+                    print(json.dumps(result, indent=2))
+            elif choice == "4":
+                host = input("Enter host:port (e.g., example.com:443): ")
+                count = input("Enter number of nodes (default 1): ")
+                node = input("Enter specific node (leave blank for any): ")
+                
+                count = int(count) if count.isdigit() else 1
+                node = node if node else None
+                
+                result = perform_check("udp", host, count, node)
+                if result:
+                    print(json.dumps(result, indent=2))
+            elif choice == "5":
+                host = input("Enter domain name to resolve: ")
+                count = input("Enter number of nodes (default 1): ")
+                node = input("Enter specific node (leave blank for any): ")
+                
+                count = int(count) if count.isdigit() else 1
+                node = node if node else None
+                
+                result = perform_check("dns", host, count, node)
+                if result:
+                    print(json.dumps(result, indent=2))
             elif choice == "6":
-                nodes = checker.get_nodes()
-                print("\nAvailable nodes:")
-                print(f"{'Server':<20} {'IP Address':<15} {'Location':<25}")
-                print("-" * 60)
-                for node in nodes:
-                    print(f"{node['server']:<20} {node['address']:<15} {node['location']:<25}")
-                continue
-            
-            elif choice in ("1", "2", "3", "4", "5"):
-                server = input("Enter server/host to check (e.g., google.com or google.com:443): ").strip()
-                if not server:
-                    print("Server is required")
-                    continue
-                
-                check_type = {
-                    "1": "ping",
-                    "2": "http",
-                    "3": "tcp",
-                    "4": "udp",
-                    "5": "dns"
-                }[choice]
-                
-                try:
-                    count = int(input(f"Number of nodes to use (1-40, default 5): ") or "5")
-                    if count < 1 or count > 40:
-                        print("Number of nodes must be between 1 and 40")
-                        continue
-                except ValueError:
-                    print("Invalid number, using default (5)")
-                    count = 5
-                
-                results = checker.check_host(server, check_type, count)
-                print_results(results, check_type)
-            
+                nodes = check_nodes()
+                if nodes:
+                    for node in nodes:
+                        print(f"Hostname: {node['hostname']}")
+                        print(f"Location: {node['location']}")
+                        print("-" * 40)
             else:
-                print("Invalid option, please try again")
-        
-        except KeyboardInterrupt:
-            print("\nOperation cancelled by user")
-            break
-        except Exception as e:
-            print(f"An error occurred: {e}")
+                print("Invalid choice. Please try again.")
 
 if __name__ == "__main__":
+    # Check if required packages are installed
+    try:
+        import requests
+        import json
+    except ImportError:
+        print("Error: Required packages not found. Please install them with:")
+        print("pip install requests")
+        sys.exit(1)
+    
     main()
