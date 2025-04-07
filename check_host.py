@@ -2,14 +2,13 @@
 """
 Network Diagnostic Tool
 
-A comprehensive network testing tool that performs:
+A comprehensive network testing utility that performs:
 - Ping tests
-- HTTP/HTTPS availability and speed tests
+- HTTP checks
 - TCP port checks
-- UDP checks
+- UDP port checks
 - DNS resolution tests
-
-Uses Check-Host.net nodes for global testing.
+Using both local system checks and the Check-Host API for global testing.
 """
 
 import os
@@ -32,11 +31,11 @@ from colorama import Fore, Style, Back
 colorama.init(autoreset=True)
 
 # Global configuration
-DEFAULT_TIMEOUT = 10  # seconds (increased from 5)
+DEFAULT_TIMEOUT = 10  # seconds
 MAX_THREADS = 10
 PING_COUNT = 4  # Number of pings to send
 MAX_RETRIES = 3  # Max retries for API checks
-RESULT_WAIT_TIME = 10  # Initial wait time for results (increased from 5)
+RESULT_WAIT_TIME = 10  # Initial wait time for results
 MAX_WAIT_TIME = 30  # Max total wait time for results
 
 # Node data organized by continent
@@ -121,7 +120,7 @@ NODE_DETAILS = {
 }
 
 class CheckHostAPI:
-    """Client for the Check-Host API, focused on ping and HTTP checks."""
+    """Client for the Check-Host API, supporting multiple check types."""
     
     BASE_URL = "https://check-host.net"
     
@@ -171,7 +170,6 @@ class CheckHostAPI:
         
         for attempt in range(MAX_RETRIES):
             try:
-                # Request new check
                 response = self.session.get(
                     f"{self.BASE_URL}/check-ping",
                     params=params,
@@ -179,20 +177,18 @@ class CheckHostAPI:
                 )
                 response.raise_for_status()
                 
-                # Get check ID and wait for results
                 check_id = response.json().get('request_id')
                 if not check_id:
                     if attempt == MAX_RETRIES - 1:
                         return {'error': 'No check ID received after retries'}
                     continue
                 
-                # Get results with retries
                 return self._get_check_results(check_id)
                 
             except requests.exceptions.RequestException as e:
                 if attempt == MAX_RETRIES - 1:
                     return {'error': f"API request failed after retries: {str(e)}"}
-                time.sleep(2)  # Wait before retry
+                time.sleep(2)
     
     def check_http(self, url: str, nodes: List[str] = None) -> Dict:
         """Perform HTTP check from multiple nodes."""
@@ -206,7 +202,6 @@ class CheckHostAPI:
         
         for attempt in range(MAX_RETRIES):
             try:
-                # Request new check
                 response = self.session.get(
                     f"{self.BASE_URL}/check-http",
                     params=params,
@@ -214,20 +209,18 @@ class CheckHostAPI:
                 )
                 response.raise_for_status()
                 
-                # Get check ID and wait for results
                 check_id = response.json().get('request_id')
                 if not check_id:
                     if attempt == MAX_RETRIES - 1:
                         return {'error': 'No check ID received after retries'}
                     continue
                 
-                # Get results with retries
                 return self._get_check_results(check_id)
                 
             except requests.exceptions.RequestException as e:
                 if attempt == MAX_RETRIES - 1:
                     return {'error': f"API request failed after retries: {str(e)}"}
-                time.sleep(2)  # Wait before retry
+                time.sleep(2)
     
     def check_tcp(self, host: str, port: int, nodes: List[str] = None) -> Dict:
         """Perform TCP check from multiple nodes."""
@@ -241,7 +234,6 @@ class CheckHostAPI:
         
         for attempt in range(MAX_RETRIES):
             try:
-                # Request new check
                 response = self.session.get(
                     f"{self.BASE_URL}/check-tcp",
                     params=params,
@@ -249,20 +241,82 @@ class CheckHostAPI:
                 )
                 response.raise_for_status()
                 
-                # Get check ID and wait for results
                 check_id = response.json().get('request_id')
                 if not check_id:
                     if attempt == MAX_RETRIES - 1:
                         return {'error': 'No check ID received after retries'}
                     continue
                 
-                # Get results with retries
                 return self._get_check_results(check_id)
                 
             except requests.exceptions.RequestException as e:
                 if attempt == MAX_RETRIES - 1:
                     return {'error': f"API request failed after retries: {str(e)}"}
-                time.sleep(2)  # Wait before retry
+                time.sleep(2)
+    
+    def check_udp(self, host: str, port: int, nodes: List[str] = None) -> Dict:
+        """Perform UDP check from multiple nodes."""
+        if nodes is None:
+            nodes = list(NODE_DETAILS.keys())
+        
+        params = {
+            'host': f"{host}:{port}",
+            'node': nodes
+        }
+        
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.session.get(
+                    f"{self.BASE_URL}/check-udp",
+                    params=params,
+                    timeout=DEFAULT_TIMEOUT
+                )
+                response.raise_for_status()
+                
+                check_id = response.json().get('request_id')
+                if not check_id:
+                    if attempt == MAX_RETRIES - 1:
+                        return {'error': 'No check ID received after retries'}
+                    continue
+                
+                return self._get_check_results(check_id)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == MAX_RETRIES - 1:
+                    return {'error': f"API request failed after retries: {str(e)}"}
+                time.sleep(2)
+    
+    def check_dns(self, domain: str, nodes: List[str] = None) -> Dict:
+        """Perform DNS check from multiple nodes."""
+        if nodes is None:
+            nodes = list(NODE_DETAILS.keys())
+        
+        params = {
+            'host': domain,
+            'node': nodes
+        }
+        
+        for attempt in range(MAX_RETRIES):
+            try:
+                response = self.session.get(
+                    f"{self.BASE_URL}/check-dns",
+                    params=params,
+                    timeout=DEFAULT_TIMEOUT
+                )
+                response.raise_for_status()
+                
+                check_id = response.json().get('request_id')
+                if not check_id:
+                    if attempt == MAX_RETRIES - 1:
+                        return {'error': 'No check ID received after retries'}
+                    continue
+                
+                return self._get_check_results(check_id)
+                
+            except requests.exceptions.RequestException as e:
+                if attempt == MAX_RETRIES - 1:
+                    return {'error': f"API request failed after retries: {str(e)}"}
+                time.sleep(2)
 
 class NetworkTester:
     def __init__(self):
@@ -284,7 +338,6 @@ class NetworkTester:
             if os.path.exists(path):
                 return path
         
-        # Fallback to just 'ping' if none found (relying on PATH)
         return 'ping'
 
     def ping(self, host: str, count: int = PING_COUNT) -> Dict[str, Dict]:
@@ -310,13 +363,19 @@ class NetworkTester:
                 
                 if node_result and isinstance(node_result, list) and len(node_result) > 0:
                     ping_result = node_result[0]
-                    if isinstance(ping_result, dict) and 'rtt' in ping_result:
+                    if isinstance(ping_result, list) and len(ping_result) > 1:
+                        # Parse Check-Host ping results
+                        successful = sum(1 for r in ping_result if r[0] == "OK")
+                        total = len(ping_result)
+                        rtts = [r[1] * 1000 for r in ping_result if r[0] == "OK"]  # Convert to ms
+                        
                         results[region] = {
-                            'success': True,
-                            'avg_latency': ping_result['rtt'],
-                            'min_latency': ping_result['rtt'],
-                            'max_latency': ping_result['rtt'],
-                            'packet_loss': 0.0
+                            'success': successful > 0,
+                            'avg_latency': sum(rtts)/len(rtts) if rtts else 0,
+                            'min_latency': min(rtts) if rtts else 0,
+                            'max_latency': max(rtts) if rtts else 0,
+                            'packet_loss': (total - successful) / total * 100 if total > 0 else 100,
+                            'ip': ping_result[0][2] if len(ping_result[0]) > 2 else None
                         }
                     else:
                         results[region] = {
@@ -354,12 +413,27 @@ class NetworkTester:
             if node in NODE_DETAILS:
                 region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
                 
-                if node_result and isinstance(node_result, dict):
-                    results[region] = {
-                        'success': node_result.get('status', '').startswith('OK'),
-                        'status_code': node_result.get('response_code', 0),
-                        'response_time': node_result.get('time', 0)
-                    }
+                if node_result and isinstance(node_result, list) and len(node_result) > 0:
+                    http_result = node_result[0]
+                    if isinstance(http_result, list) and len(http_result) > 3:
+                        success = http_result[0] == 1
+                        response_time = http_result[1] * 1000  # Convert to ms
+                        status_msg = http_result[2]
+                        status_code = http_result[3]
+                        ip = http_result[4] if len(http_result) > 4 else None
+                        
+                        results[region] = {
+                            'success': success,
+                            'status_code': status_code,
+                            'status_msg': status_msg,
+                            'response_time': response_time,
+                            'ip': ip
+                        }
+                    else:
+                        results[region] = {
+                            'success': False,
+                            'error': 'Invalid HTTP response'
+                        }
                 else:
                     results[region] = {
                         'success': False,
@@ -391,10 +465,15 @@ class NetworkTester:
                 
                 if node_result and isinstance(node_result, list) and len(node_result) > 0:
                     tcp_result = node_result[0]
-                    if isinstance(tcp_result, dict) and 'time' in tcp_result:
+                    if isinstance(tcp_result, list) and len(tcp_result) > 1:
+                        success = tcp_result[0] == 1
+                        connect_time = tcp_result[1] * 1000  # Convert to ms
+                        ip = tcp_result[2] if len(tcp_result) > 2 else None
+                        
                         results[region] = {
-                            'success': True,
-                            'connect_time': tcp_result['time']
+                            'success': success,
+                            'connect_time': connect_time,
+                            'ip': ip
                         }
                     else:
                         results[region] = {
@@ -582,7 +661,7 @@ class NetworkTester:
 def display_ping_results(results: Dict) -> None:
     """Display ping results in a formatted way."""
     print(f"\n{Fore.CYAN}PING RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Packet Loss':<15} {'Latency (min/avg/max)':<25}")
+    print(f"{'Location':<30} {'Status':<10} {'Packet Loss':<15} {'Latency (min/avg/max)':<25} {'IP':<15}")
     print("-" * 80)
     
     for location, data in results.items():
@@ -590,22 +669,25 @@ def display_ping_results(results: Dict) -> None:
             status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
             packet_loss = "N/A"
             latency = data['error']
+            ip = "N/A"
         else:
             status = f"{Fore.GREEN}UP{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}DOWN{Style.RESET_ALL}"
             packet_loss = f"{data.get('packet_loss', 0):.1f}%"
             
             if data.get('success'):
                 latency = f"{data.get('min_latency', 0):.1f}/{data.get('avg_latency', 0):.1f}/{data.get('max_latency', 0):.1f} ms"
+                ip = data.get('ip', 'N/A')
             else:
                 latency = "N/A"
+                ip = "N/A"
         
-        print(f"{location:<30} {status:<10} {packet_loss:<15} {latency:<25}")
+        print(f"{location:<30} {status:<10} {packet_loss:<15} {latency:<25} {ip:<15}")
 
 
 def display_http_results(results: Dict) -> None:
     """Display HTTP results in a formatted way."""
     print(f"\n{Fore.CYAN}HTTP RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Response Code':<15} {'Response Time':<15}")
+    print(f"{'Location':<30} {'Status':<10} {'Response Code':<15} {'Response Time':<15} {'IP':<15}")
     print("-" * 80)
     
     for location, data in results.items():
@@ -613,59 +695,68 @@ def display_http_results(results: Dict) -> None:
             status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
             code = "N/A"
             time_ms = data['error']
+            ip = "N/A"
         else:
             if data.get('success'):
                 status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
-                code = str(data.get('status_code', 'N/A'))
+                code = f"{data.get('status_code', 'N/A')} {data.get('status_msg', '')}"
                 time_ms = f"{data.get('response_time', 0):.1f} ms"
+                ip = data.get('ip', 'N/A')
             else:
                 status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
                 code = "N/A"
                 time_ms = "N/A"
+                ip = "N/A"
         
-        print(f"{location:<30} {status:<10} {code:<15} {time_ms:<15}")
+        print(f"{location:<30} {status:<10} {code:<15} {time_ms:<15} {ip:<15}")
 
 
 def display_tcp_results(results: Dict, port: int) -> None:
     """Display TCP results in a formatted way."""
     print(f"\n{Fore.CYAN}TCP PORT {port} RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Connect Time':<15}")
+    print(f"{'Location':<30} {'Status':<10} {'Connect Time':<15} {'IP':<15}")
     print("-" * 80)
     
     for location, data in results.items():
         if 'error' in data:
             status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
             time_ms = data['error']
+            ip = "N/A"
         else:
             if data.get('success'):
                 status = f"{Fore.GREEN}OPEN{Style.RESET_ALL}"
                 time_ms = f"{data.get('connect_time', 0):.1f} ms"
+                ip = data.get('ip', 'N/A')
             else:
                 status = f"{Fore.RED}CLOSED{Style.RESET_ALL}"
                 time_ms = "N/A"
+                ip = "N/A"
         
-        print(f"{location:<30} {status:<10} {time_ms:<15}")
+        print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
 
 
 def display_udp_results(results: Dict, port: int) -> None:
     """Display UDP results in a formatted way."""
     print(f"\n{Fore.CYAN}UDP PORT {port} RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Response Time':<15}")
+    print(f"{'Location':<30} {'Status':<10} {'Response Time':<15} {'IP':<15}")
     print("-" * 80)
     
     for location, data in results.items():
         if 'error' in data:
             status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
             time_ms = data['error']
+            ip = "N/A"
         else:
             if data.get('success'):
                 status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
                 time_ms = f"{data.get('response_time', 0):.1f} ms" if 'response_time' in data else "No response"
+                ip = data.get('ip', 'N/A')
             else:
                 status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
                 time_ms = "N/A"
+                ip = "N/A"
         
-        print(f"{location:<30} {status:<10} {time_ms:<15}")
+        print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
 
 
 def display_dns_results(results: Dict) -> None:
