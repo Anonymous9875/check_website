@@ -31,7 +31,7 @@ from colorama import Fore, Style, Back
 colorama.init(autoreset=True)
 
 # Global configuration
-DEFAULT_TIMEOUT = 10  # seconds
+DEFAULT_TIMEOUT = 30  # seconds
 MAX_THREADS = 10
 PING_COUNT = 4  # Number of pings to send
 MAX_RETRIES = 3  # Max retries for API checks
