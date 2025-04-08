@@ -222,13 +222,13 @@ class CheckHostAPI:
                     return {'error': f"API request failed after retries: {str(e)}"}
                 time.sleep(2)
     
-    def check_tcp(self, url: str, nodes: List[str] = None) -> Dict:
+    def check_tcp(self, host: str, nodes: List[str] = None) -> Dict:
         """Perform TCP check from multiple nodes."""
         if nodes is None:
             nodes = list(NODE_DETAILS.keys())
         
         params = {
-            'host': url,
+            'host': host,
             'node': nodes
         }
         
@@ -254,13 +254,13 @@ class CheckHostAPI:
                     return {'error': f"API request failed after retries: {str(e)}"}
                 time.sleep(2)
     
-    def check_udp(self, url: str, nodes: List[str] = None) -> Dict:
+    def check_udp(self, host: str, nodes: List[str] = None) -> Dict:
         """Perform UDP check from multiple nodes."""
         if nodes is None:
             nodes = list(NODE_DETAILS.keys())
         
         params = {
-            'host': url,
+            'host': host,
             'node': nodes
         }
         
@@ -286,13 +286,13 @@ class CheckHostAPI:
                     return {'error': f"API request failed after retries: {str(e)}"}
                 time.sleep(2)
     
-    def check_dns(self, url: str, nodes: List[str] = None) -> Dict:
+    def check_dns(self, domain: str, nodes: List[str] = None) -> Dict:
         """Perform DNS check from multiple nodes."""
         if nodes is None:
             nodes = list(NODE_DETAILS.keys())
         
         params = {
-            'host': url,
+            'host': domain,
             'node': nodes
         }
         
@@ -442,7 +442,7 @@ class NetworkTester:
         
         return results
 
-    def tcp_check(self, url: str) -> Dict[str, Dict]:
+    def tcp_check(self, host: str) -> Dict[str, Dict]:
         """
         Perform a global TCP check to the specified host using all Check-Host nodes.
         
@@ -452,13 +452,9 @@ class NetworkTester:
         Returns:
             Dictionary with TCP results from all nodes
         """
-        if not url.startswith(('http://', 'https://')):
-            url = f'http://{url}'
-            
-        api_result = self.check_host_api.check_tcp(url)
+        api_result = self.check_host_api.check_tcp(host)
         
-        if 'error' in api_resu'
-        Plt:
+        if 'error' in api_result:
             return {'error': api_result['error']}
         
         results = {}
@@ -491,7 +487,7 @@ class NetworkTester:
         
         return results
 
-    def udp_check(self, url: str) -> Dict[str, Dict]:
+    def udp_check(self, host: str) -> Dict[str, Dict]:
         """
         Perform a global UDP check to the specified host using all Check-Host nodes.
         
@@ -501,10 +497,7 @@ class NetworkTester:
         Returns:
             Dictionary with UDP results from all nodes
         """
-        if not url.startswith(('http://', 'https://')):
-            url = f'http://{url}'
-            
-        api_result = self.check_host_api.check_udp(url)
+        api_result = self.check_host_api.check_udp(host)
         
         if 'error' in api_result:
             return {'error': api_result['error']}
@@ -539,7 +532,7 @@ class NetworkTester:
         
         return results
 
-    def dns_check(self, url: str) -> Dict[str, Dict]:
+    def dns_check(self, domain: str) -> Dict[str, Dict]:
         """
         Perform a global DNS resolution check for the specified domain using all Check-Host nodes.
         
@@ -549,10 +542,7 @@ class NetworkTester:
         Returns:
             Dictionary with DNS results from all nodes
         """
-        if not url.startswith(('http://', 'https://')):
-            url = f'http://{url}'
-            
-        api_result = self.check_host_api.check_dns(url)
+        api_result = self.check_host_api.check_dns(domain)
         
         if 'error' in api_result:
             return {'error': api_result['error']}
@@ -736,7 +726,7 @@ def interactive_mode():
         print("2. HTTP test")
         print("3. TCP test")
         print("4. UDP test")
-        print("5. DNS test")
+        print("5. DNS resolution test")
         print("0. Exit")
         
         choice = input("Enter your choice: ")
@@ -745,28 +735,28 @@ def interactive_mode():
             break
         
         if choice == '1':
-            host = input("Enter URL to test ping: ")
+            host = input("Enter host to ping: ")
             results = tester.ping(host)
             display_ping_results(results)
             
         elif choice == '2':
-            url = input("Enter URL to test http: ")
+            url = input("Enter URL to test (include http:// or https://): ")
             results = tester.http_check(url)
             display_http_results(results)
                 
         elif choice == '3':
-            url = input("Enter URL to test tcp: ")
-            results = tester.tcp_check(url)
+            host = input("Enter host: ")
+            results = tester.tcp_check(host)
             display_tcp_results(results)
                 
         elif choice == '4':
-            url = input("Enter URL to test udp: ")
-            results = tester.udp_check(url)
+            host = input("Enter host: ")
+            results = tester.udp_check(host)
             display_udp_results(results)
                 
         elif choice == '5':
-            url = input("Enter URL to test dns: ")
-            results = tester.dns_check(url)
+            domain = input("Enter domain to resolve: ")
+            results = tester.dns_check(domain)
             display_dns_results(results)
                 
         else:
@@ -802,21 +792,21 @@ def main():
 
     # TCP command
     tcp_parser = subparsers.add_parser('tcp', help='Perform TCP test')
-    tcp_parser.add_argument('url', help='URL to test')
+    tcp_parser.add_argument('host', help='Host to test')
     tcp_parser.add_argument('-o', '--output', help='Output file to save results')
     tcp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
     # UDP command
     udp_parser = subparsers.add_parser('udp', help='Perform UDP test')
-    udp_parser.add_argument('url', help='URL to test')
+    udp_parser.add_argument('host', help='Host to test')
     udp_parser.add_argument('-o', '--output', help='Output file to save results')
     udp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
     # DNS command
     dns_parser = subparsers.add_parser('dns', help='Perform DNS resolution test')
-    dns_parser.add_argument('url', help='URL to test')
+    dns_parser.add_argument('domain', help='Domain to resolve')
     dns_parser.add_argument('-o', '--output', help='Output file to save results')
     dns_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
@@ -839,15 +829,15 @@ def main():
             display_http_results(results)
                 
         elif args.command == 'tcp':
-            results = tester.tcp_check(args.url)
+            results = tester.tcp_check(args.host)
             display_tcp_results(results)
                 
         elif args.command == 'udp':
-            results = tester.udp_check(args.url)
+            results = tester.udp_check(args.host)
             display_udp_results(results)
                 
         elif args.command == 'dns':
-            results = tester.dns_check(args.url)
+            results = tester.dns_check(args.domain)
             display_dns_results(results)
         
         # Save results if requested
