@@ -31,7 +31,7 @@ from colorama import Fore, Style, Back
 colorama.init(autoreset=True)
 
 # Global configuration
-DEFAULT_TIMEOUT = 30  # seconds
+DEFAULT_TIMEOUT = 10  # seconds
 MAX_THREADS = 10
 PING_COUNT = 4  # Number of pings to send
 MAX_RETRIES = 3  # Max retries for API checks
@@ -747,26 +747,26 @@ def interactive_mode():
             display_ping_results(results)
             
         elif choice == '2':
-            url = input("Enter URL to check (include http:// or https://): ")
+            url = input("Enter host to http: ")
             results = tester.http_check(url)
             display_http_results(results)
                 
         elif choice == '3':
-            host = input("Enter host to check: ")
+            host = input("Enter host to tcp: ")
             port = input("Enter port (leave empty for default): ")
             port = int(port) if port else None
             results = tester.tcp_check(host, port)
             display_tcp_results(results)
                 
         elif choice == '4':
-            host = input("Enter host to check: ")
+            host = input("Enter host to udp: ")
             port = input("Enter port (leave empty for default): ")
             port = int(port) if port else None
             results = tester.udp_check(host, port)
             display_udp_results(results)
                 
         elif choice == '5':
-            domain = input("Enter domain to resolve: ")
+            domain = input("Enter host to dns: ")
             record_type = input("Enter record type (A, MX, CNAME, etc. - leave empty for A): ") or 'A'
             results = tester.dns_check(domain, record_type)
             display_dns_results(results)
