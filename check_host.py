@@ -1,42 +1,45 @@
 #!/usr/bin/env python3
 """
-Network Diagnostic Tool
+Network Diagnostic Tool (Enhanced Check-Host)
 
 A comprehensive network testing utility that performs:
-- Ping tests
 - HTTP checks
+- Ping tests 
 - TCP port checks
 - UDP port checks
 - DNS resolution tests
-Using both local system checks and the Check-Host API for global testing.
+Using the Check-Host API for global testing.
 """
 
 import os
 import sys
 import time
-import socket
-import subprocess
-import requests
-import dns.resolver
-import argparse
-from datetime import datetime
-from typing import Dict, List, Tuple, Optional, Union
-import concurrent.futures
 import json
-import ipaddress
-import colorama
-from colorama import Fore, Style, Back
+import argparse
+import requests
+from urllib.parse import quote
+from typing import Dict, List, Optional
 
-# Initialize colorama
-colorama.init(autoreset=True)
+# Initialize colorama for colored output
+try:
+    import colorama
+    from colorama import Fore, Style, Back
+    colorama.init(autoreset=True)
+except ImportError:
+    # Fallback colors if colorama is not available
+    class Fore:
+        RED = GREEN = YELLOW = CYAN = WHITE = RESET = ""
+    class Style:
+        RESET_ALL = BRIGHT = DIM = ""
+    class Back:
+        RESET = ""
 
 # Global configuration
-DEFAULT_TIMEOUT = 10  # seconds
-MAX_THREADS = 10
-PING_COUNT = 4  # Number of pings to send
+DEFAULT_TIMEOUT = 30  # seconds
 MAX_RETRIES = 3  # Max retries for API checks
-RESULT_WAIT_TIME = 10  # Initial wait time for results
+RESULT_WAIT_TIME = 5  # Initial wait time for results
 MAX_WAIT_TIME = 30  # Max total wait time for results
+PING_COUNT = 4  # Number of pings to send in API checks
 
 # Node data organized by continent
 NODES_BY_CONTINENT = {
@@ -69,10 +72,15 @@ NODES_BY_CONTINENT = {
     ]
 }
 
-# Node details mapping
+# All nodes combined
+ALL_NODES = []
+for nodes in NODES_BY_CONTINENT.values():
+    ALL_NODES.extend(nodes)
+
+# Node details mapping with country organization
 NODE_DETAILS = {
+    # Europe (EU)
     "bg1.node.check-host.net": {"country": "Bulgaria", "city": "Sofia", "continent": "EU"},
-    "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
     "ch1.node.check-host.net": {"country": "Switzerland", "city": "Zurich", "continent": "EU"},
     "cz1.node.check-host.net": {"country": "Czechia", "city": "C.Budejovice", "continent": "EU"},
     "de1.node.check-host.net": {"country": "Germany", "city": "Nuremberg", "continent": "EU"},
@@ -81,19 +89,8 @@ NODE_DETAILS = {
     "fi1.node.check-host.net": {"country": "Finland", "city": "Helsinki", "continent": "EU"},
     "fr1.node.check-host.net": {"country": "France", "city": "Roubaix", "continent": "EU"},
     "fr2.node.check-host.net": {"country": "France", "city": "Paris", "continent": "EU"},
-    "hk1.node.check-host.net": {"country": "Hong Kong", "city": "Hong Kong", "continent": "AS"},
     "hu1.node.check-host.net": {"country": "Hungary", "city": "Nyiregyhaza", "continent": "EU"},
-    "il1.node.check-host.net": {"country": "Israel", "city": "Tel Aviv", "continent": "AS"},
-    "il2.node.check-host.net": {"country": "Israel", "city": "Netanya", "continent": "AS"},
-    "in1.node.check-host.net": {"country": "India", "city": "Mumbai", "continent": "AS"},
-    "in2.node.check-host.net": {"country": "India", "city": "Chennai", "continent": "AS"},
-    "ir1.node.check-host.net": {"country": "Iran", "city": "Tehran", "continent": "AS"},
-    "ir3.node.check-host.net": {"country": "Iran", "city": "Mashhad", "continent": "AS"},
-    "ir5.node.check-host.net": {"country": "Iran", "city": "Esfahan", "continent": "AS"},
-    "ir6.node.check-host.net": {"country": "Iran", "city": "Karaj", "continent": "AS"},
     "it2.node.check-host.net": {"country": "Italy", "city": "Milan", "continent": "EU"},
-    "jp1.node.check-host.net": {"country": "Japan", "city": "Tokyo", "continent": "AS"},
-    "kz1.node.check-host.net": {"country": "Kazakhstan", "city": "Karaganda", "continent": "AS"},
     "lt1.node.check-host.net": {"country": "Lithuania", "city": "Vilnius", "continent": "EU"},
     "md1.node.check-host.net": {"country": "Moldova", "city": "Chisinau", "continent": "EU"},
     "nl1.node.check-host.net": {"country": "Netherlands", "city": "Amsterdam", "continent": "EU"},
@@ -102,21 +99,41 @@ NODE_DETAILS = {
     "pl2.node.check-host.net": {"country": "Poland", "city": "Warsaw", "continent": "EU"},
     "pt1.node.check-host.net": {"country": "Portugal", "city": "Viana", "continent": "EU"},
     "rs1.node.check-host.net": {"country": "Serbia", "city": "Belgrade", "continent": "EU"},
+    "se1.node.check-host.net": {"country": "Sweden", "city": "Tallberg", "continent": "EU"},
+    "uk1.node.check-host.net": {"country": "UK", "city": "Coventry", "continent": "EU"},
+    
+    # Asia (AS)
+    "hk1.node.check-host.net": {"country": "Hong Kong", "city": "Hong Kong", "continent": "AS"},
+    "il1.node.check-host.net": {"country": "Israel", "city": "Tel Aviv", "continent": "AS"},
+    "il2.node.check-host.net": {"country": "Israel", "city": "Netanya", "continent": "AS"},
+    "in1.node.check-host.net": {"country": "India", "city": "Mumbai", "continent": "AS"},
+    "in2.node.check-host.net": {"country": "India", "city": "Chennai", "continent": "AS"},
+    "ir1.node.check-host.net": {"country": "Iran", "city": "Tehran", "continent": "AS"},
+    "ir3.node.check-host.net": {"country": "Iran", "city": "Mashhad", "continent": "AS"},
+    "ir5.node.check-host.net": {"country": "Iran", "city": "Esfahan", "continent": "AS"},
+    "ir6.node.check-host.net": {"country": "Iran", "city": "Karaj", "continent": "AS"},
+    "jp1.node.check-host.net": {"country": "Japan", "city": "Tokyo", "continent": "AS"},
+    "kz1.node.check-host.net": {"country": "Kazakhstan", "city": "Karaganda", "continent": "AS"},
+    "tr1.node.check-host.net": {"country": "Turkey", "city": "Istanbul", "continent": "AS"},
+    "tr2.node.check-host.net": {"country": "Turkey", "city": "Gebze", "continent": "AS"},
+    "vn1.node.check-host.net": {"country": "Vietnam", "city": "Ho Chi Minh City", "continent": "AS"},
+    
+    # North America (NA)
+    "us1.node.check-host.net": {"country": "USA", "city": "Los Angeles", "continent": "NA"},
+    "us2.node.check-host.net": {"country": "USA", "city": "Dallas", "continent": "NA"},
+    "us3.node.check-host.net": {"country": "USA", "city": "Atlanta", "continent": "NA"},
+    
+    # South America (SA)
+    "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
+    
+    # Eastern Europe (EU-EAST)
     "ru1.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
     "ru2.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
     "ru3.node.check-host.net": {"country": "Russia", "city": "Saint Petersburg", "continent": "EU-EAST"},
     "ru4.node.check-host.net": {"country": "Russia", "city": "Ekaterinburg", "continent": "EU-EAST"},
-    "se1.node.check-host.net": {"country": "Sweden", "city": "Tallberg", "continent": "EU"},
-    "tr1.node.check-host.net": {"country": "Turkey", "city": "Istanbul", "continent": "AS"},
-    "tr2.node.check-host.net": {"country": "Turkey", "city": "Gebze", "continent": "AS"},
     "ua1.node.check-host.net": {"country": "Ukraine", "city": "Khmelnytskyi", "continent": "EU-EAST"},
     "ua2.node.check-host.net": {"country": "Ukraine", "city": "Kyiv", "continent": "EU-EAST"},
-    "ua3.node.check-host.net": {"country": "Ukraine", "city": "SpaceX Starlink", "continent": "EU-EAST"},
-    "uk1.node.check-host.net": {"country": "UK", "city": "Coventry", "continent": "EU"},
-    "us1.node.check-host.net": {"country": "USA", "city": "Los Angeles", "continent": "NA"},
-    "us2.node.check-host.net": {"country": "USA", "city": "Dallas", "continent": "NA"},
-    "us3.node.check-host.net": {"country": "USA", "city": "Atlanta", "continent": "NA"},
-    "vn1.node.check-host.net": {"country": "Vietnam", "city": "Ho Chi Minh City", "continent": "AS"}
+    "ua3.node.check-host.net": {"country": "Ukraine", "city": "SpaceX Starlink", "continent": "EU-EAST"}
 }
 
 class CheckHostAPI:
@@ -127,7 +144,7 @@ class CheckHostAPI:
     def __init__(self):
         self.session = requests.Session()
         self.session.headers.update({
-            'User-Agent': 'NetworkTester/1.0',
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
             'Accept': 'application/json'
         })
     
@@ -199,6 +216,9 @@ class CheckHostAPI:
             'host': url,
             'node': nodes
         }
+
+        if not url.startswith(('http://', 'https://')):
+            url = f'http://{url}'
         
         for attempt in range(MAX_RETRIES):
             try:
@@ -231,6 +251,9 @@ class CheckHostAPI:
             'host': f"{host}:{port}" if port else host,
             'node': nodes
         }
+
+        if not host.startswith(('http://', 'https://')):
+            host = f'http://{host}'
         
         for attempt in range(MAX_RETRIES):
             try:
@@ -263,6 +286,9 @@ class CheckHostAPI:
             'host': f"{host}:{port}" if port else host,
             'node': nodes
         }
+
+        if not host.startswith(('http://', 'https://')):
+            host = f'http://{host}'
         
         for attempt in range(MAX_RETRIES):
             try:
@@ -296,6 +322,9 @@ class CheckHostAPI:
             'type': record_type,
             'node': nodes
         }
+
+        if not domain.startswith(('http://', 'https://')):
+            domain = f'http://{domain}'
         
         for attempt in range(MAX_RETRIES):
             try:
@@ -321,25 +350,7 @@ class CheckHostAPI:
 
 class NetworkTester:
     def __init__(self):
-        self.ping_path = self._find_ping_binary()
-        self.timeout = DEFAULT_TIMEOUT
-        self.max_threads = MAX_THREADS
         self.check_host_api = CheckHostAPI()
-
-    def _find_ping_binary(self) -> str:
-        """Find the appropriate ping binary for the system."""
-        possible_paths = [
-            '/bin/ping',
-            '/usr/bin/ping',
-            '/system/bin/ping',
-            '/data/data/com.termux/files/usr/bin/ping'
-        ]
-        
-        for path in possible_paths:
-            if os.path.exists(path):
-                return path
-        
-        return 'ping'
 
     def ping(self, host: str, count: int = PING_COUNT) -> Dict[str, Dict]:
         """
@@ -360,7 +371,7 @@ class NetworkTester:
         results = {}
         for node, node_result in api_result.items():
             if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
+                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
                 
                 if node_result and isinstance(node_result, list) and len(node_result) > 0:
                     ping_result = node_result[0]
@@ -412,7 +423,7 @@ class NetworkTester:
         results = {}
         for node, node_result in api_result.items():
             if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
+                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
                 
                 if node_result and isinstance(node_result, list) and len(node_result) > 0:
                     http_result = node_result[0]
@@ -454,6 +465,14 @@ class NetworkTester:
         Returns:
             Dictionary with TCP results from all nodes
         """
+        params = {
+            'host': host,
+            'node': list(NODE_DETAILS.keys())
+        }
+
+        if not host.startswith(('http://', 'https://')):
+            host = f'http://{host}'
+
         api_result = self.check_host_api.check_tcp(host, port)
         
         if 'error' in api_result:
@@ -462,7 +481,7 @@ class NetworkTester:
         results = {}
         for node, node_result in api_result.items():
             if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
+                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
                 
                 if node_result and isinstance(node_result, list) and len(node_result) > 0:
                     tcp_result = node_result[0]
@@ -500,6 +519,14 @@ class NetworkTester:
         Returns:
             Dictionary with UDP results from all nodes
         """
+        params = {
+            'host': host,
+            'node': list(NODE_DETAILS.keys())
+        }
+
+        if not host.startswith(('http://', 'https://')):
+            host = f'http://{host}'
+
         api_result = self.check_host_api.check_udp(host, port)
         
         if 'error' in api_result:
@@ -508,7 +535,7 @@ class NetworkTester:
         results = {}
         for node, node_result in api_result.items():
             if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
+                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
                 
                 if node_result and isinstance(node_result, list) and len(node_result) > 0:
                     udp_result = node_result[0]
@@ -546,6 +573,14 @@ class NetworkTester:
         Returns:
             Dictionary with DNS results from all nodes
         """
+        params = {
+            'host': domain,
+            'node': list(NODE_DETAILS.keys())
+        }
+
+        if not domain.startswith(('http://', 'https://')):
+            domain = f'http://{domain}'
+
         api_result = self.check_host_api.check_dns(domain, record_type)
         
         if 'error' in api_result:
@@ -554,7 +589,7 @@ class NetworkTester:
         results = {}
         for node, node_result in api_result.items():
             if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']} ({NODE_DETAILS[node]['city']})"
+                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
                 
                 if node_result and isinstance(node_result, list) and len(node_result) > 0:
                     dns_result = node_result[0]
@@ -581,6 +616,10 @@ class NetworkTester:
                     }
         
         return results
+
+def clear_screen():
+    """Clear the screen based on the operating system."""
+    os.system('clear' if os.name == 'posix' else 'cls')
 
 def display_ping_results(results: Dict) -> None:
     """Display ping results in a formatted way."""
@@ -726,48 +765,59 @@ def interactive_mode():
     tester = NetworkTester()
     
     print(f"{Fore.CYAN}=== Network Diagnostic Tool ==={Style.RESET_ALL}")
+    print(f"{Fore.YELLOW}Using check-host.net API{Style.RESET_ALL}")
+    print(f"{'-' * 40}")
     
     while True:
         print("\nOptions:")
-        print("1. Ping test")
-        print("2. HTTP test")
+        print("1. HTTP test")
+        print("2. Ping test")
         print("3. TCP test")
         print("4. UDP test")
         print("5. DNS test")
         print("0. Exit")
         
-        choice = input("Enter your choice: ")
+        choice = input(f"{Fore.GREEN}Enter your choice: {Style.RESET_ALL}")
         
         if choice == '0':
+            print(f"{Fore.CYAN}Goodbye!{Style.RESET_ALL}")
             break
         
         if choice == '1':
-            host = input("Enter host to ping: ")
-            results = tester.ping(host)
-            display_ping_results(results)
-            
-        elif choice == '2':
-            url = input("Enter host to http: ")
+            url = input("Enter URL to Http : ").strip()
+            if not url.startswith(('http://', 'https://')):
+                url = 'https://' + url
             results = tester.http_check(url)
             display_http_results(results)
+            
+        elif choice == '2':
+            host = input("Enter host to Ping: ").strip()
+            results = tester.ping(host)
+            display_ping_results(results)
                 
         elif choice == '3':
-            host = input("Enter host to tcp: ")
-            port = input("Enter port (leave empty for default): ")
+            host = input("Enter host to Tcp: ").strip()
+            port = input("Enter port (leave empty for default): ").strip()
             port = int(port) if port else None
+            if not host.startswith(('http://', 'https://')):
+                host = 'https://' + host
             results = tester.tcp_check(host, port)
             display_tcp_results(results)
                 
         elif choice == '4':
-            host = input("Enter host to udp: ")
-            port = input("Enter port (leave empty for default): ")
+            host = input("Enter host to Udp: ").strip()
+            port = input("Enter port (leave empty for default): ").strip()
             port = int(port) if port else None
+            if not host.startswith(('http://', 'https://')):
+                host = 'https://' + host
             results = tester.udp_check(host, port)
             display_udp_results(results)
                 
         elif choice == '5':
-            domain = input("Enter host to dns: ")
-            record_type = input("Enter record type (A, MX, CNAME, etc. - leave empty for A): ") or 'A'
+            domain = input("Enter host to Dns: ").strip()
+            record_type = input("Enter record type (A, MX, CNAME, etc. - leave empty for A): ").strip() or 'A'
+            if not domain.startswith(('http://', 'https://')):
+                domain = 'https://' + domain
             results = tester.dns_check(domain, record_type)
             display_dns_results(results)
                 
@@ -777,14 +827,34 @@ def interactive_mode():
         # Ask to save results
         save = input("\nSave results to file? (y/n): ").lower()
         if save == 'y':
-            filename = input("Enter filename: ")
-            format = input("Format (json/text): ").lower() or 'json'
+            filename = input("Enter filename: ").strip()
+            format = input("Format (json/text): ").lower().strip() or 'json'
             save_results(results, filename, format)
 
 def main():
     """Main function to handle command line arguments."""
+    # Check if requests is installed
+    try:
+        import requests
+    except ImportError:
+        print(f"{Fore.RED}Error: The 'requests' library is not installed.{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}Install it with: pip install requests{Style.RESET_ALL}")
+        print(f"{Fore.YELLOW}On Termux, use: pkg install python && pip install requests{Style.RESET_ALL}")
+        sys.exit(1)
+
+    # Set UTF-8 encoding
+    if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
+        sys.stdout.reconfigure(encoding='utf-8')
+
     parser = argparse.ArgumentParser(description='Network Diagnostic Tool')
     subparsers = parser.add_subparsers(dest='command', required=False)
+
+    # HTTP command
+    http_parser = subparsers.add_parser('http', help='Perform HTTP test')
+    http_parser.add_argument('url', help='URL to test')
+    http_parser.add_argument('-o', '--output', help='Output file to save results')
+    http_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
+                          help='Output format')
 
     # Ping command
     ping_parser = subparsers.add_parser('ping', help='Perform ping test')
@@ -793,13 +863,6 @@ def main():
                            help='Number of pings to send (not used in API check)')
     ping_parser.add_argument('-o', '--output', help='Output file to save results')
     ping_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
-                           help='Output format')
-
-    # HTTP command
-    http_parser = subparsers.add_parser('http', help='Perform HTTP test')
-    http_parser.add_argument('url', help='URL to test')
-    http_parser.add_argument('-o', '--output', help='Output file to save results')
-    http_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
                            help='Output format')
 
     # TCP command
@@ -832,17 +895,18 @@ def main():
     tester = NetworkTester()
 
     if not args.command:
+        clear_screen()
         interactive_mode()
         return
 
     try:
-        if args.command == 'ping':
-            results = tester.ping(args.host, args.count)
-            display_ping_results(results)
-            
-        elif args.command == 'http':
+        if args.command == 'http':
             results = tester.http_check(args.url)
             display_http_results(results)
+            
+        elif args.command == 'ping':
+            results = tester.ping(args.host, args.count)
+            display_ping_results(results)
                 
         elif args.command == 'tcp':
             results = tester.tcp_check(args.host, args.port)
