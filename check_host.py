@@ -1,45 +1,31 @@
 #!/usr/bin/env python3
 """
-Network Diagnostic Tool (Enhanced Check-Host)
+Network Diagnostic Tool (Check-Host)
 
 A comprehensive network testing utility that performs:
-- HTTP checks
-- Ping tests 
-- TCP port checks
-- UDP port checks
-- DNS resolution tests
+- Ping test
+- DNS test
+- HTTP test
+- TCP test
+- UDP test
 Using the Check-Host API for global testing.
 """
 
-import os
-import sys
-import time
-import json
 import argparse
+import json
+import time
 import requests
-from urllib.parse import quote
-from typing import Dict, List, Optional
+import sys
+import os
+from datetime import datetime
+from typing import Dict, Any, List, Optional, Tuple, Set
+from collections import defaultdict
+import ipaddress
+import colorama
+from colorama import Fore, Style, Back
 
-# Initialize colorama for colored output
-try:
-    import colorama
-    from colorama import Fore, Style, Back
-    colorama.init(autoreset=True)
-except ImportError:
-    # Fallback colors if colorama is not available
-    class Fore:
-        RED = GREEN = YELLOW = CYAN = WHITE = RESET = ""
-    class Style:
-        RESET_ALL = BRIGHT = DIM = ""
-    class Back:
-        RESET = ""
-
-# Global configuration
-DEFAULT_TIMEOUT = 30  # seconds
-MAX_RETRIES = 3  # Max retries for API checks
-RESULT_WAIT_TIME = 5  # Initial wait time for results
-MAX_WAIT_TIME = 30  # Max total wait time for results
-PING_COUNT = 4  # Number of pings to send in API checks
+# Initialize colorama for cross-platform colored terminal output
+colorama.init(autoreset=True)
 
 # Node data organized by continent
 NODES_BY_CONTINENT = {
@@ -77,10 +63,10 @@ ALL_NODES = []
 for nodes in NODES_BY_CONTINENT.values():
     ALL_NODES.extend(nodes)
 
-# Node details mapping with country organization
+# Node details mapping
 NODE_DETAILS = {
-    # Europe (EU)
     "bg1.node.check-host.net": {"country": "Bulgaria", "city": "Sofia", "continent": "EU"},
+    "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
     "ch1.node.check-host.net": {"country": "Switzerland", "city": "Zurich", "continent": "EU"},
     "cz1.node.check-host.net": {"country": "Czechia", "city": "C.Budejovice", "continent": "EU"},
     "de1.node.check-host.net": {"country": "Germany", "city": "Nuremberg", "continent": "EU"},
@@ -89,21 +75,9 @@ NODE_DETAILS = {
     "fi1.node.check-host.net": {"country": "Finland", "city": "Helsinki", "continent": "EU"},
     "fr1.node.check-host.net": {"country": "France", "city": "Roubaix", "continent": "EU"},
     "fr2.node.check-host.net": {"country": "France", "city": "Paris", "continent": "EU"},
-    "hu1.node.check-host.net": {"country": "Hungary", "city": "Nyiregyhaza", "continent": "EU"},
-    "it2.node.check-host.net": {"country": "Italy", "city": "Milan", "continent": "EU"},
-    "lt1.node.check-host.net": {"country": "Lithuania", "city": "Vilnius", "continent": "EU"},
-    "md1.node.check-host.net": {"country": "Moldova", "city": "Chisinau", "continent": "EU"},
-    "nl1.node.check-host.net": {"country": "Netherlands", "city": "Amsterdam", "continent": "EU"},
-    "nl2.node.check-host.net": {"country": "Netherlands", "city": "Meppel", "continent": "EU"},
-    "pl1.node.check-host.net": {"country": "Poland", "city": "Poznan", "continent": "EU"},
-    "pl2.node.check-host.net": {"country": "Poland", "city": "Warsaw", "continent": "EU"},
-    "pt1.node.check-host.net": {"country": "Portugal", "city": "Viana", "continent": "EU"},
-    "rs1.node.check-host.net": {"country": "Serbia", "city": "Belgrade", "continent": "EU"},
-    "se1.node.check-host.net": {"country": "Sweden", "city": "Tallberg", "continent": "EU"},
-    "uk1.node.check-host.net": {"country": "UK", "city": "Coventry", "continent": "EU"},
-    
-    # Asia (AS)
     "hk1.node.check-host.net": {"country": "Hong Kong", "city": "Hong Kong", "continent": "AS"},
+    "hu1.node.check-host.net": {"country": "Hungary", "city": "Nyiregyhaza", "continent": "EU"},
+    "id2.node.check-host.net": {"country": "Indonesia", "city": "Jakarta", "continent": "AS"},
     "il1.node.check-host.net": {"country": "Israel", "city": "Tel Aviv", "continent": "AS"},
     "il2.node.check-host.net": {"country": "Israel", "city": "Netanya", "continent": "AS"},
     "in1.node.check-host.net": {"country": "India", "city": "Mumbai", "continent": "AS"},
@@ -112,823 +86,723 @@ NODE_DETAILS = {
     "ir3.node.check-host.net": {"country": "Iran", "city": "Mashhad", "continent": "AS"},
     "ir5.node.check-host.net": {"country": "Iran", "city": "Esfahan", "continent": "AS"},
     "ir6.node.check-host.net": {"country": "Iran", "city": "Karaj", "continent": "AS"},
+    "it2.node.check-host.net": {"country": "Italy", "city": "Milan", "continent": "EU"},
     "jp1.node.check-host.net": {"country": "Japan", "city": "Tokyo", "continent": "AS"},
     "kz1.node.check-host.net": {"country": "Kazakhstan", "city": "Karaganda", "continent": "AS"},
-    "tr1.node.check-host.net": {"country": "Turkey", "city": "Istanbul", "continent": "AS"},
-    "tr2.node.check-host.net": {"country": "Turkey", "city": "Gebze", "continent": "AS"},
-    "vn1.node.check-host.net": {"country": "Vietnam", "city": "Ho Chi Minh City", "continent": "AS"},
-    
-    # North America (NA)
-    "us1.node.check-host.net": {"country": "USA", "city": "Los Angeles", "continent": "NA"},
-    "us2.node.check-host.net": {"country": "USA", "city": "Dallas", "continent": "NA"},
-    "us3.node.check-host.net": {"country": "USA", "city": "Atlanta", "continent": "NA"},
-    
-    # South America (SA)
-    "br1.node.check-host.net": {"country": "Brazil", "city": "Sao Paulo", "continent": "SA"},
-    
-    # Eastern Europe (EU-EAST)
+    "lt1.node.check-host.net": {"country": "Lithuania", "city": "Vilnius", "continent": "EU"},
+    "md1.node.check-host.net": {"country": "Moldova", "city": "Chisinau", "continent": "EU"},
+    "nl1.node.check-host.net": {"country": "Netherlands", "city": "Amsterdam", "continent": "EU"},
+    "nl2.node.check-host.net": {"country": "Netherlands", "city": "Meppel", "continent": "EU"},
+    "pl1.node.check-host.net": {"country": "Poland", "city": "Poznan", "continent": "EU"},
+    "pl2.node.check-host.net": {"country": "Poland", "city": "Warsaw", "continent": "EU"},
+    "pt1.node.check-host.net": {"country": "Portugal", "city": "Viana", "continent": "EU"},
+    "rs1.node.check-host.net": {"country": "Serbia", "city": "Belgrade", "continent": "EU"},
     "ru1.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
     "ru2.node.check-host.net": {"country": "Russia", "city": "Moscow", "continent": "EU-EAST"},
     "ru3.node.check-host.net": {"country": "Russia", "city": "Saint Petersburg", "continent": "EU-EAST"},
     "ru4.node.check-host.net": {"country": "Russia", "city": "Ekaterinburg", "continent": "EU-EAST"},
+    "se1.node.check-host.net": {"country": "Sweden", "city": "Tallberg", "continent": "EU"},
+    "tr1.node.check-host.net": {"country": "Turkey", "city": "Istanbul", "continent": "AS"},
+    "tr2.node.check-host.net": {"country": "Turkey", "city": "Gebze", "continent": "AS"},
     "ua1.node.check-host.net": {"country": "Ukraine", "city": "Khmelnytskyi", "continent": "EU-EAST"},
     "ua2.node.check-host.net": {"country": "Ukraine", "city": "Kyiv", "continent": "EU-EAST"},
-    "ua3.node.check-host.net": {"country": "Ukraine", "city": "SpaceX Starlink", "continent": "EU-EAST"}
+    "ua3.node.check-host.net": {"country": "Ukraine", "city": "SpaceX Starlink", "continent": "EU-EAST"},
+    "uk1.node.check-host.net": {"country": "UK", "city": "Coventry", "continent": "EU"},
+    "us1.node.check-host.net": {"country": "USA", "city": "Los Angeles", "continent": "NA"},
+    "us2.node.check-host.net": {"country": "USA", "city": "Dallas", "continent": "NA"},
+    "us3.node.check-host.net": {"country": "USA", "city": "Atlanta", "continent": "NA"},
+    "vn1.node.check-host.net": {"country": "Vietnam", "city": "Ho Chi Minh City", "continent": "AS"}
 }
 
 class CheckHostAPI:
-    """Client for the Check-Host API, supporting multiple check types."""
+    """Client for the Check-Host API, focused on PING,HTTP,TCP,UDP,DNS checks."""
     
     BASE_URL = "https://check-host.net"
     
     def __init__(self):
+        """Initialize the API client with proper headers."""
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.114 Safari/537.36',
-            'Accept': 'application/json'
-        })
+        self.session.headers.update({"Accept": "application/json"})
     
-    def _get_check_results(self, check_id: str) -> Dict:
-        """Wait for and retrieve check results with retries."""
-        result_url = f"{self.BASE_URL}/check-result/{check_id}"
+    def run_check(self, check_type: str, host: str, nodes: List[str]) -> Dict[str, Any]:
+        """
+        Run a check against a host using specified nodes.
+        
+        Args:
+            check_type: Either 'ping', 'http', 'tcp', 'udp', or 'dns'
+            host: The host to check (domain or IP)
+            nodes: List of node identifiers to use for the check
+            
+        Returns:
+            API response containing request_id and nodes information
+        """
+        if check_type not in ["ping", "http", "tcp", "udp", "dns"]:
+            raise ValueError(f"Check type must be 'ping', 'http', 'tcp', 'udp', or 'dns'")
+        
+        url = f"{self.BASE_URL}/check-{check_type}"
+        params = {"host": host}
+        
+        # Add each node as a separate parameter
+        if nodes:
+            params["node"] = nodes
+        
+        try:
+            response = self.session.get(url, params=params)
+            response.raise_for_status()
+            return response.json()
+        except requests.exceptions.RequestException as e:
+            print(f"{Fore.RED}Error making API request: {e}")
+            sys.exit(1)
+    
+    def get_check_result(self, request_id: str, timeout: int = 30) -> Dict[str, Any]:
+        """
+        Get the results of a check, polling until complete or timeout.
+        
+        Args:
+            request_id: The request ID returned from run_check
+            timeout: Maximum time to wait for results in seconds
+            
+        Returns:
+            Check results
+        """
+        url = f"{self.BASE_URL}/check-result/{request_id}"
+        
+        # Poll until results are available or timeout
         start_time = time.time()
-        elapsed = 0
         
-        while elapsed < MAX_WAIT_TIME:
+        while time.time() - start_time < timeout:
             try:
-                time.sleep(RESULT_WAIT_TIME)
-                response = self.session.get(result_url, timeout=DEFAULT_TIMEOUT)
+                response = self.session.get(url)
                 response.raise_for_status()
+                result = response.json()
                 
-                result_data = response.json()
-                
-                # Check if all nodes have responded
-                if all(v is not None for v in result_data.values()):
-                    return result_data
-                
-                elapsed = time.time() - start_time
-                
-            except requests.exceptions.RequestException as e:
-                elapsed = time.time() - start_time
-                if elapsed >= MAX_WAIT_TIME:
-                    return {'error': f"Timeout waiting for results: {str(e)}"}
-                
-        return {'error': 'Timeout waiting for all nodes to respond'}
-    
-    def check_ping(self, host: str, nodes: List[str] = None) -> Dict:
-        """Perform ping check from multiple nodes."""
-        if nodes is None:
-            nodes = list(NODE_DETAILS.keys())
-        
-        params = {
-            'host': host,
-            'node': nodes
-        }
-        
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.session.get(
-                    f"{self.BASE_URL}/check-ping",
-                    params=params,
-                    timeout=DEFAULT_TIMEOUT
-                )
-                response.raise_for_status()
-                
-                check_id = response.json().get('request_id')
-                if not check_id:
-                    if attempt == MAX_RETRIES - 1:
-                        return {'error': 'No check ID received after retries'}
-                    continue
-                
-                return self._get_check_results(check_id)
-                
-            except requests.exceptions.RequestException as e:
-                if attempt == MAX_RETRIES - 1:
-                    return {'error': f"API request failed after retries: {str(e)}"}
+                # Check if all results are available (not None)
+                if not any(v is None for v in result.values()):
+                    return result
+                    
+                # Wait before trying again
                 time.sleep(2)
-    
-    def check_http(self, url: str, nodes: List[str] = None) -> Dict:
-        """Perform HTTP check from multiple nodes."""
-        if nodes is None:
-            nodes = list(NODE_DETAILS.keys())
-        
-        params = {
-            'host': url,
-            'node': nodes
-        }
-
-        if not url.startswith(('http://', 'https://')):
-            url = f'http://{url}'
-        
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.session.get(
-                    f"{self.BASE_URL}/check-http",
-                    params=params,
-                    timeout=DEFAULT_TIMEOUT
-                )
-                response.raise_for_status()
-                
-                check_id = response.json().get('request_id')
-                if not check_id:
-                    if attempt == MAX_RETRIES - 1:
-                        return {'error': 'No check ID received after retries'}
-                    continue
-                
-                return self._get_check_results(check_id)
-                
             except requests.exceptions.RequestException as e:
-                if attempt == MAX_RETRIES - 1:
-                    return {'error': f"API request failed after retries: {str(e)}"}
-                time.sleep(2)
+                print(f"{Fore.RED}Error getting results: {e}")
+                return {}
+        
+        print(f"{Fore.YELLOW}Warning: Some nodes did not respond within the timeout period.")
+        return result  # Return partial results if timeout
+
+
+def validate_host(host: str) -> str:
+    """
+    Validate and format the host input.
     
-    def check_tcp(self, host: str, port: int = None, nodes: List[str] = None) -> Dict:
-        """Perform TCP check from multiple nodes."""
-        if nodes is None:
-            nodes = list(NODE_DETAILS.keys())
+    Args:
+        host: Host to validate (domain or IP)
         
-        params = {
-            'host': f"{host}:{port}" if port else host,
-            'node': nodes
-        }
-
-        if not host.startswith(('http://', 'https://')):
-            host = f'http://{host}'
-        
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.session.get(
-                    f"{self.BASE_URL}/check-tcp",
-                    params=params,
-                    timeout=DEFAULT_TIMEOUT
-                )
-                response.raise_for_status()
-                
-                check_id = response.json().get('request_id')
-                if not check_id:
-                    if attempt == MAX_RETRIES - 1:
-                        return {'error': 'No check ID received after retries'}
-                    continue
-                
-                return self._get_check_results(check_id)
-                
-            except requests.exceptions.RequestException as e:
-                if attempt == MAX_RETRIES - 1:
-                    return {'error': f"API request failed after retries: {str(e)}"}
-                time.sleep(2)
-    
-    def check_udp(self, host: str, port: int = None, nodes: List[str] = None) -> Dict:
-        """Perform UDP check from multiple nodes."""
-        if nodes is None:
-            nodes = list(NODE_DETAILS.keys())
-        
-        params = {
-            'host': f"{host}:{port}" if port else host,
-            'node': nodes
-        }
-
-        if not host.startswith(('http://', 'https://')):
-            host = f'http://{host}'
-        
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.session.get(
-                    f"{self.BASE_URL}/check-udp",
-                    params=params,
-                    timeout=DEFAULT_TIMEOUT
-                )
-                response.raise_for_status()
-                
-                check_id = response.json().get('request_id')
-                if not check_id:
-                    if attempt == MAX_RETRIES - 1:
-                        return {'error': 'No check ID received after retries'}
-                    continue
-                
-                return self._get_check_results(check_id)
-                
-            except requests.exceptions.RequestException as e:
-                if attempt == MAX_RETRIES - 1:
-                    return {'error': f"API request failed after retries: {str(e)}"}
-                time.sleep(2)
-    
-    def check_dns(self, domain: str, record_type: str = 'A', nodes: List[str] = None) -> Dict:
-        """Perform DNS check from multiple nodes."""
-        if nodes is None:
-            nodes = list(NODE_DETAILS.keys())
-        
-        params = {
-            'host': domain,
-            'type': record_type,
-            'node': nodes
-        }
-
-        if not domain.startswith(('http://', 'https://')):
-            domain = f'http://{domain}'
-        
-        for attempt in range(MAX_RETRIES):
-            try:
-                response = self.session.get(
-                    f"{self.BASE_URL}/check-dns",
-                    params=params,
-                    timeout=DEFAULT_TIMEOUT
-                )
-                response.raise_for_status()
-                
-                check_id = response.json().get('request_id')
-                if not check_id:
-                    if attempt == MAX_RETRIES - 1:
-                        return {'error': 'No check ID received after retries'}
-                    continue
-                
-                return self._get_check_results(check_id)
-                
-            except requests.exceptions.RequestException as e:
-                if attempt == MAX_RETRIES - 1:
-                    return {'error': f"API request failed after retries: {str(e)}"}
-                time.sleep(2)
-
-class NetworkTester:
-    def __init__(self):
-        self.check_host_api = CheckHostAPI()
-
-    def ping(self, host: str, count: int = PING_COUNT) -> Dict[str, Dict]:
-        """
-        Perform a global ping test to the specified host using all Check-Host nodes.
-        
-        Args:
-            host: Hostname or IP address to ping
-            count: Number of pings to send (not used in API check)
-            
-        Returns:
-            Dictionary with ping results from all nodes
-        """
-        api_result = self.check_host_api.check_ping(host)
-        
-        if 'error' in api_result:
-            return {'error': api_result['error']}
-        
-        results = {}
-        for node, node_result in api_result.items():
-            if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
-                
-                if node_result and isinstance(node_result, list) and len(node_result) > 0:
-                    ping_result = node_result[0]
-                    if isinstance(ping_result, list) and len(ping_result) > 1:
-                        # Parse Check-Host ping results
-                        successful = sum(1 for r in ping_result if r[0] == "OK")
-                        total = len(ping_result)
-                        rtts = [r[1] * 1000 for r in ping_result if r[0] == "OK"]  # Convert to ms
-                        
-                        results[region] = {
-                            'success': successful > 0,
-                            'avg_latency': sum(rtts)/len(rtts) if rtts else 0,
-                            'min_latency': min(rtts) if rtts else 0,
-                            'max_latency': max(rtts) if rtts else 0,
-                            'packet_loss': (total - successful) / total * 100 if total > 0 else 100,
-                            'ip': ping_result[0][2] if len(ping_result[0]) > 2 else None
-                        }
-                    else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid ping response'
-                        }
-                else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No ping data'
-                    }
-        
-        return results
-
-    def http_check(self, url: str) -> Dict[str, Dict]:
-        """
-        Perform a global HTTP check to the specified URL using all Check-Host nodes.
-        
-        Args:
-            url: URL to check (must include http:// or https://)
-            
-        Returns:
-            Dictionary with HTTP results from all nodes
-        """
-        if not url.startswith(('http://', 'https://')):
-            url = f'http://{url}'
-
-        api_result = self.check_host_api.check_http(url)
-        
-        if 'error' in api_result:
-            return {'error': api_result['error']}
-        
-        results = {}
-        for node, node_result in api_result.items():
-            if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
-                
-                if node_result and isinstance(node_result, list) and len(node_result) > 0:
-                    http_result = node_result[0]
-                    if isinstance(http_result, list) and len(http_result) > 3:
-                        success = http_result[0] == 1
-                        response_time = http_result[1] * 1000  # Convert to ms
-                        status_msg = http_result[2]
-                        status_code = http_result[3]
-                        ip = http_result[4] if len(http_result) > 4 else None
-                        
-                        results[region] = {
-                            'success': success,
-                            'status_code': status_code,
-                            'status_msg': status_msg,
-                            'response_time': response_time,
-                            'ip': ip
-                        }
-                    else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid HTTP response'
-                        }
-                else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No HTTP data'
-                    }
-        
-        return results
-
-    def tcp_check(self, host: str, port: int = None) -> Dict[str, Dict]:
-        """
-        Perform a global TCP check to the specified host using all Check-Host nodes.
-        
-        Args:
-            host: Hostname or IP address
-            port: Port number to check (optional)
-            
-        Returns:
-            Dictionary with TCP results from all nodes
-        """
-        params = {
-            'host': host,
-            'node': list(NODE_DETAILS.keys())
-        }
-
-        if not host.startswith(('http://', 'https://')):
-            host = f'http://{host}'
-
-        api_result = self.check_host_api.check_tcp(host, port)
-        
-        if 'error' in api_result:
-            return {'error': api_result['error']}
-        
-        results = {}
-        for node, node_result in api_result.items():
-            if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
-                
-                if node_result and isinstance(node_result, list) and len(node_result) > 0:
-                    tcp_result = node_result[0]
-                    if isinstance(tcp_result, list) and len(tcp_result) > 1:
-                        success = tcp_result[0] == 1
-                        connect_time = tcp_result[1] * 1000  # Convert to ms
-                        ip = tcp_result[2] if len(tcp_result) > 2 else None
-                        
-                        results[region] = {
-                            'success': success,
-                            'connect_time': connect_time,
-                            'ip': ip
-                        }
-                    else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid TCP response'
-                        }
-                else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No TCP data'
-                    }
-        
-        return results
-
-    def udp_check(self, host: str, port: int = None) -> Dict[str, Dict]:
-        """
-        Perform a global UDP check to the specified host using all Check-Host nodes.
-        
-        Args:
-            host: Hostname or IP address
-            port: Port number to check (optional)
-            
-        Returns:
-            Dictionary with UDP results from all nodes
-        """
-        params = {
-            'host': host,
-            'node': list(NODE_DETAILS.keys())
-        }
-
-        if not host.startswith(('http://', 'https://')):
-            host = f'http://{host}'
-
-        api_result = self.check_host_api.check_udp(host, port)
-        
-        if 'error' in api_result:
-            return {'error': api_result['error']}
-        
-        results = {}
-        for node, node_result in api_result.items():
-            if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
-                
-                if node_result and isinstance(node_result, list) and len(node_result) > 0:
-                    udp_result = node_result[0]
-                    if isinstance(udp_result, list) and len(udp_result) > 1:
-                        success = udp_result[0] == 1
-                        response_time = udp_result[1] * 1000  # Convert to ms
-                        ip = udp_result[2] if len(udp_result) > 2 else None
-                        
-                        results[region] = {
-                            'success': success,
-                            'response_time': response_time,
-                            'ip': ip
-                        }
-                    else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid UDP response'
-                        }
-                else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No UDP data'
-                    }
-        
-        return results
-
-    def dns_check(self, domain: str, record_type: str = 'A') -> Dict[str, Dict]:
-        """
-        Perform a global DNS resolution check for the specified domain using all Check-Host nodes.
-        
-        Args:
-            domain: Domain name to resolve
-            record_type: DNS record type to check (A, MX, CNAME, etc.)
-            
-        Returns:
-            Dictionary with DNS results from all nodes
-        """
-        params = {
-            'host': domain,
-            'node': list(NODE_DETAILS.keys())
-        }
-
-        if not domain.startswith(('http://', 'https://')):
-            domain = f'http://{domain}'
-
-        api_result = self.check_host_api.check_dns(domain, record_type)
-        
-        if 'error' in api_result:
-            return {'error': api_result['error']}
-        
-        results = {}
-        for node, node_result in api_result.items():
-            if node in NODE_DETAILS:
-                region = f"{NODE_DETAILS[node]['country']}, {NODE_DETAILS[node]['city']}"
-                
-                if node_result and isinstance(node_result, list) and len(node_result) > 0:
-                    dns_result = node_result[0]
-                    if isinstance(dns_result, list) and len(dns_result) > 0:
-                        success = True
-                        addresses = [record[1] for record in dns_result if len(record) > 1]
-                        resolution_time = dns_result[0][0] * 1000 if dns_result[0][0] else 0  # Convert to ms
-                        
-                        results[region] = {
-                            'success': success,
-                            'resolution_time': resolution_time,
-                            'addresses': addresses,
-                            'record_type': record_type
-                        }
-                    else:
-                        results[region] = {
-                            'success': False,
-                            'error': 'Invalid DNS response'
-                        }
-                else:
-                    results[region] = {
-                        'success': False,
-                        'error': 'No DNS data'
-                    }
-        
-        return results
-
-def clear_screen():
-    """Clear the screen based on the operating system."""
-    os.system('clear' if os.name == 'posix' else 'cls')
-
-def display_ping_results(results: Dict) -> None:
-    """Display ping results in a formatted way."""
-    print(f"\n{Fore.CYAN}PING RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Packet Loss':<15} {'Latency (min/avg/max)':<25} {'IP':<15}")
-    print("-" * 80)
-    
-    for location, data in results.items():
-        if 'error' in data:
-            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
-            packet_loss = "N/A"
-            latency = data['error']
-            ip = "N/A"
-        else:
-            status = f"{Fore.GREEN}UP{Style.RESET_ALL}" if data.get('success') else f"{Fore.RED}DOWN{Style.RESET_ALL}"
-            packet_loss = f"{data.get('packet_loss', 0):.1f}%"
-            
-            if data.get('success'):
-                latency = f"{data.get('min_latency', 0):.1f}/{data.get('avg_latency', 0):.1f}/{data.get('max_latency', 0):.1f} ms"
-                ip = data.get('ip', 'N/A')
-            else:
-                latency = "N/A"
-                ip = "N/A"
-        
-        print(f"{location:<30} {status:<10} {packet_loss:<15} {latency:<25} {ip:<15}")
-
-def display_http_results(results: Dict) -> None:
-    """Display HTTP results in a formatted way."""
-    print(f"\n{Fore.CYAN}HTTP RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Response Code':<15} {'Response Time':<15} {'IP':<15}")
-    print("-" * 80)
-    
-    for location, data in results.items():
-        if 'error' in data:
-            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
-            code = "N/A"
-            time_ms = data['error']
-            ip = "N/A"
-        else:
-            if data.get('success'):
-                status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
-                code = f"{data.get('status_code', 'N/A')} {data.get('status_msg', '')}"
-                time_ms = f"{data.get('response_time', 0):.1f} ms"
-                ip = data.get('ip', 'N/A')
-            else:
-                status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
-                code = "N/A"
-                time_ms = "N/A"
-                ip = "N/A"
-        
-        print(f"{location:<30} {status:<10} {code:<15} {time_ms:<15} {ip:<15}")
-
-def display_tcp_results(results: Dict) -> None:
-    """Display TCP results in a formatted way."""
-    print(f"\n{Fore.CYAN}TCP RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Connect Time':<15} {'IP':<15}")
-    print("-" * 80)
-    
-    for location, data in results.items():
-        if 'error' in data:
-            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
-            time_ms = data['error']
-            ip = "N/A"
-        else:
-            if data.get('success'):
-                status = f"{Fore.GREEN}OPEN{Style.RESET_ALL}"
-                time_ms = f"{data.get('connect_time', 0):.1f} ms"
-                ip = data.get('ip', 'N/A')
-            else:
-                status = f"{Fore.RED}CLOSED{Style.RESET_ALL}"
-                time_ms = "N/A"
-                ip = "N/A"
-        
-        print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
-
-def display_udp_results(results: Dict) -> None:
-    """Display UDP results in a formatted way."""
-    print(f"\n{Fore.CYAN}UDP RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Response Time':<15} {'IP':<15}")
-    print("-" * 80)
-    
-    for location, data in results.items():
-        if 'error' in data:
-            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
-            time_ms = data['error']
-            ip = "N/A"
-        else:
-            if data.get('success'):
-                status = f"{Fore.GREEN}UP{Style.RESET_ALL}"
-                time_ms = f"{data.get('response_time', 0):.1f} ms"
-                ip = data.get('ip', 'N/A')
-            else:
-                status = f"{Fore.RED}DOWN{Style.RESET_ALL}"
-                time_ms = "N/A"
-                ip = "N/A"
-        
-        print(f"{location:<30} {status:<10} {time_ms:<15} {ip:<15}")
-
-def display_dns_results(results: Dict) -> None:
-    """Display DNS results in a formatted way."""
-    print(f"\n{Fore.CYAN}DNS RESULTS:{Style.RESET_ALL}")
-    print(f"{'Location':<30} {'Status':<10} {'Resolution Time':<20} {'Addresses':<30}")
-    print("-" * 80)
-    
-    for location, data in results.items():
-        if 'error' in data:
-            status = f"{Fore.RED}ERROR{Style.RESET_ALL}"
-            time_ms = "N/A"
-            addresses = data['error']
-        else:
-            if data.get('success'):
-                status = f"{Fore.GREEN}OK{Style.RESET_ALL}"
-                time_ms = f"{data.get('resolution_time', 0):.1f} ms"
-                addresses = ", ".join(data.get('addresses', []))[:30]
-                if 'record_type' in data:
-                    addresses = f"[{data['record_type']}] {addresses}"
-            else:
-                status = f"{Fore.RED}FAIL{Style.RESET_ALL}"
-                time_ms = "N/A"
-                addresses = "N/A"
-        
-        print(f"{location:<30} {status:<10} {time_ms:<20} {addresses:<30}")
-
-def save_results(results: Dict, filename: str, format: str = 'json') -> None:
-    """Save results to a file in the specified format."""
+    Returns:
+        Properly formatted host string
+    """
+    # Check if it's an IP address
     try:
-        with open(filename, 'w') as f:
-            if format == 'json':
-                json.dump(results, f, indent=2)
-            else:  # text
-                for region, data in results.items():
-                    f.write(f"Location: {region}\n")
-                    for key, value in data.items():
-                        f.write(f"  {key}: {value}\n")
-                    f.write("\n")
+        ipaddress.ip_address(host)
+        return host  # Valid IP address
+    except ValueError:
+        pass
+    
+    # Check if it's an HTTP URL
+    if host.startswith(('http://', 'https://')):
+        return host
+    
+    # If it's a domain without protocol, add http:// for HTTP checks
+    if '.' in host and not host.startswith(('http://', 'https://')):
+        return host  # For ping we don't need protocol
         
-        print(f"{Fore.GREEN}Results saved to {filename}{Style.RESET_ALL}")
-    except Exception as e:
-        print(f"{Fore.RED}Error saving results: {e}{Style.RESET_ALL}")
+    raise ValueError(f"Invalid host format: {host}")
 
-def interactive_mode():
-    """Run in interactive mode."""
-    tester = NetworkTester()
+
+def get_nodes_selection(continent: Optional[str] = None) -> List[str]:
+    """
+    Get nodes based on continent selection.
     
-    print(f"{Fore.CYAN}=== Network Diagnostic Tool ==={Style.RESET_ALL}")
-    print(f"{Fore.YELLOW}Using check-host.net API{Style.RESET_ALL}")
-    print(f"{'-' * 40}")
+    Args:
+        continent: Continent code or None for all nodes
+        
+    Returns:
+        List of node identifiers
+    """
+    if not continent:
+        return ALL_NODES
     
+    continent = continent.upper()
+    if continent == "ALL":
+        return ALL_NODES
+    
+    if continent in NODES_BY_CONTINENT:
+        return NODES_BY_CONTINENT[continent]
+    
+    # Special case for combined continents
+    if continent == "EU+NA":
+        return NODES_BY_CONTINENT["EU"] + NODES_BY_CONTINENT["NA"]
+    
+    print(f"{Fore.YELLOW}Warning: Unknown continent '{continent}'. Using all nodes.")
+    return ALL_NODES
+
+
+def calculate_ping_stats(ping_results: List[List]) -> Tuple[int, int, float, float, float]:
+    """
+    Calculate ping statistics from results.
+    
+    Args:
+        ping_results: List of ping results
+        
+    Returns:
+        Tuple of (successful_pings, total_pings, min_rtt, avg_rtt, max_rtt)
+    """
+    successful = 0
+    total = 0
+    rtts = []
+    
+    for result in ping_results:
+        total += 1
+        if result[0] == "OK":
+            successful += 1
+            rtts.append(result[1] * 1000)  # Convert to ms
+    
+    if not rtts:
+        return successful, total, 0, 0, 0
+    
+    min_rtt = min(rtts) if rtts else 0
+    max_rtt = max(rtts) if rtts else 0
+    avg_rtt = sum(rtts) / len(rtts) if rtts else 0
+    
+    return successful, total, min_rtt, avg_rtt, max_rtt
+
+
+def parse_ping_results(results: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parse and organize ping results by continent.
+    
+    Args:
+        results: Raw ping results from API
+        
+    Returns:
+        Structured results with statistics
+    """
+    parsed_results = {
+        "nodes_results": [],
+        "continent_stats": defaultdict(lambda: {"successful": 0, "total": 0, "rtts": []}),
+        "overall_stats": {"successful": 0, "total": 0, "rtts": []}
+    }
+    
+    for node, data in results.items():
+        if data is None or not data[0] or data[0][0] is None:
+            continue
+            
+        node_detail = NODE_DETAILS.get(node, {"country": "Unknown", "city": "Unknown", "continent": "Unknown"})
+        continent = node_detail["continent"]
+        ping_data = data[0]
+        
+        # Calculate ping statistics
+        successful, total, min_rtt, avg_rtt, max_rtt = calculate_ping_stats(ping_data)
+        
+        # Add to node results
+        parsed_results["nodes_results"].append({
+            "node": node,
+            "country": node_detail["country"],
+            "city": node_detail["city"],
+            "continent": continent,
+            "successful": successful,
+            "total": total,
+            "min_rtt": min_rtt,
+            "avg_rtt": avg_rtt,
+            "max_rtt": max_rtt,
+            "ip": ping_data[0][2] if successful > 0 and len(ping_data[0]) > 2 else "N/A"
+        })
+        
+        # Add to continent stats
+        if successful > 0:
+            parsed_results["continent_stats"][continent]["successful"] += successful
+            parsed_results["continent_stats"][continent]["total"] += total
+            parsed_results["continent_stats"][continent]["rtts"].extend([r[1] * 1000 for r in ping_data if r[0] == "OK"])
+        else:
+            parsed_results["continent_stats"][continent]["total"] += total
+            
+        # Add to overall stats
+        parsed_results["overall_stats"]["successful"] += successful
+        parsed_results["overall_stats"]["total"] += total
+        if successful > 0:
+            parsed_results["overall_stats"]["rtts"].extend([r[1] * 1000 for r in ping_data if r[0] == "OK"])
+    
+    # Calculate averages for continents
+    for continent, stats in parsed_results["continent_stats"].items():
+        if stats["rtts"]:
+            stats["avg_rtt"] = sum(stats["rtts"]) / len(stats["rtts"])
+            stats["min_rtt"] = min(stats["rtts"])
+            stats["max_rtt"] = max(stats["rtts"])
+        else:
+            stats["avg_rtt"] = 0
+            stats["min_rtt"] = 0
+            stats["max_rtt"] = 0
+    
+    # Calculate overall average
+    if parsed_results["overall_stats"]["rtts"]:
+        rtts = parsed_results["overall_stats"]["rtts"]
+        parsed_results["overall_stats"]["avg_rtt"] = sum(rtts) / len(rtts)
+        parsed_results["overall_stats"]["min_rtt"] = min(rtts)
+        parsed_results["overall_stats"]["max_rtt"] = max(rtts)
+    else:
+        parsed_results["overall_stats"]["avg_rtt"] = 0
+        parsed_results["overall_stats"]["min_rtt"] = 0
+        parsed_results["overall_stats"]["max_rtt"] = 0
+    
+    return parsed_results
+
+
+def parse_http_results(results: Dict[str, Any]) -> Dict[str, Any]:
+    """
+    Parse and organize HTTP results by continent.
+    
+    Args:
+        results: Raw HTTP results from API
+        
+    Returns:
+        Structured results with statistics
+    """
+    parsed_results = {
+        "nodes_results": [],
+        "continent_stats": defaultdict(lambda: {"successful": 0, "total": 0, "response_times": []}),
+        "overall_stats": {"successful": 0, "total": 0, "response_times": []}
+    }
+    
+    for node, data in results.items():
+        if data is None or not data[0]:
+            continue
+            
+        node_detail = NODE_DETAILS.get(node, {"country": "Unknown", "city": "Unknown", "continent": "Unknown"})
+        continent = node_detail["continent"]
+        
+        http_data = data[0]
+        success = http_data[0] == 1
+        response_time = http_data[1] * 1000  # Convert to ms
+        status_msg = http_data[2]
+        status_code = http_data[3] if len(http_data) > 3 else "N/A"
+        ip = http_data[4] if len(http_data) > 4 else "N/A"
+        
+        # Add to node results
+        parsed_results["nodes_results"].append({
+            "node": node,
+            "country": node_detail["country"],
+            "city": node_detail["city"],
+            "continent": continent,
+            "success": success,
+            "response_time": response_time,
+            "status_msg": status_msg,
+            "status_code": status_code,
+            "ip": ip
+        })
+        
+        # Add to continent stats
+        parsed_results["continent_stats"][continent]["total"] += 1
+        if success:
+            parsed_results["continent_stats"][continent]["successful"] += 1
+            parsed_results["continent_stats"][continent]["response_times"].append(response_time)
+            
+        # Add to overall stats
+        parsed_results["overall_stats"]["total"] += 1
+        if success:
+            parsed_results["overall_stats"]["successful"] += 1
+            parsed_results["overall_stats"]["response_times"].append(response_time)
+    
+    # Calculate averages for continents
+    for continent, stats in parsed_results["continent_stats"].items():
+        if stats["response_times"]:
+            stats["avg_response_time"] = sum(stats["response_times"]) / len(stats["response_times"])
+        else:
+            stats["avg_response_time"] = 0
+    
+    # Calculate overall average
+    if parsed_results["overall_stats"]["response_times"]:
+        times = parsed_results["overall_stats"]["response_times"]
+        parsed_results["overall_stats"]["avg_response_time"] = sum(times) / len(times)
+    else:
+        parsed_results["overall_stats"]["avg_response_time"] = 0
+    
+    return parsed_results
+
+
+def display_ping_results(parsed_results: Dict[str, Any]) -> None:
+    """
+    Display ping results in a formatted table.
+    
+    Args:
+        parsed_results: Parsed ping results
+    """
+    print("\n" + "=" * 80)
+    print(f"{Fore.CYAN}PING RESULTS SUMMARY{Style.RESET_ALL}")
+    print("=" * 80)
+    
+    # Overall statistics
+    overall = parsed_results["overall_stats"]
+    success_ratio = f"{overall['successful']}/{overall['total']}"
+    success_color = Fore.GREEN if overall['successful'] == overall['total'] else Fore.RED
+    
+    print(f"\n{Fore.YELLOW}Overall Statistics:{Style.RESET_ALL}")
+    print(f"  Success Rate: {success_color}{success_ratio}{Style.RESET_ALL}")
+    if overall['successful'] > 0:
+        print(f"  Average RTT: {overall['avg_rtt']:.1f} ms")
+        print(f"  Min/Max RTT: {overall['min_rtt']:.1f} ms / {overall['max_rtt']:.1f} ms")
+    
+    # Continent statistics
+    print(f"\n{Fore.YELLOW}Statistics by Continent:{Style.RESET_ALL}")
+    for continent, stats in parsed_results["continent_stats"].items():
+        success_ratio = f"{stats['successful']}/{stats['total']}"
+        success_color = Fore.GREEN if stats['successful'] == stats['total'] else Fore.RED
+        
+        print(f"  {continent}:")
+        print(f"    Success Rate: {success_color}{success_ratio}{Style.RESET_ALL}")
+        if stats['successful'] > 0:
+            print(f"    Average RTT: {stats['avg_rtt']:.1f} ms")
+            print(f"    Min/Max RTT: {stats['min_rtt']:.1f} ms / {stats['max_rtt']:.1f} ms")
+    
+    # Detailed node results
+    print(f"\n{Fore.YELLOW}Detailed Results by Node:{Style.RESET_ALL}")
+    print(f"{'Location':<30} {'Result':<10} {'RTT min/avg/max':<25} {'IP Address':<15}")
+    print("-" * 80)
+    
+    # Sort by continent and then by country
+    sorted_results = sorted(
+        parsed_results["nodes_results"], 
+        key=lambda x: (x["continent"], x["country"], x["city"])
+    )
+    
+    for result in sorted_results:
+        location = f"{result['country']}, {result['city']}"
+        success_ratio = f"{result['successful']}/{result['total']}"
+        success_color = Fore.GREEN if result['successful'] == result['total'] else Fore.RED
+        
+        if result['successful'] > 0:
+            rtt_stats = f"{result['min_rtt']:.1f} / {result['avg_rtt']:.1f} / {result['max_rtt']:.1f} ms"
+        else:
+            rtt_stats = "N/A"
+            
+        print(f"{location:<30} {success_color}{success_ratio:<10}{Style.RESET_ALL} {rtt_stats:<25} {result['ip']:<15}")
+
+
+def display_http_results(parsed_results: Dict[str, Any]) -> None:
+    """
+    Display HTTP results in a formatted table.
+    
+    Args:
+        parsed_results: Parsed HTTP results
+    """
+    print("\n" + "=" * 80)
+    print(f"{Fore.CYAN}HTTP RESULTS SUMMARY{Style.RESET_ALL}")
+    print("=" * 80)
+    
+    # Overall statistics
+    overall = parsed_results["overall_stats"]
+    success_ratio = f"{overall['successful']}/{overall['total']}"
+    success_color = Fore.GREEN if overall['successful'] == overall['total'] else Fore.RED
+    
+    print(f"\n{Fore.YELLOW}Overall Statistics:{Style.RESET_ALL}")
+    print(f"  Success Rate: {success_color}{success_ratio}{Style.RESET_ALL}")
+    if overall['successful'] > 0:
+        print(f"  Average Response Time: {overall['avg_response_time']:.1f} ms")
+    
+    # Continent statistics
+    print(f"\n{Fore.YELLOW}Statistics by Continent:{Style.RESET_ALL}")
+    for continent, stats in parsed_results["continent_stats"].items():
+        success_ratio = f"{stats['successful']}/{stats['total']}"
+        success_color = Fore.GREEN if stats['successful'] == stats['total'] else Fore.RED
+        
+        print(f"  {continent}:")
+        print(f"    Success Rate: {success_color}{success_ratio}{Style.RESET_ALL}")
+        if stats['successful'] > 0:
+            print(f"    Average Response Time: {stats['avg_response_time']:.1f} ms")
+    
+    # Detailed node results
+    print(f"\n{Fore.YELLOW}Detailed Results by Node:{Style.RESET_ALL}")
+    print(f"{'Location':<30} {'Status':<15} {'Response Time':<15} {'IP Address':<15}")
+    print("-" * 80)
+    
+    # Sort by continent and then by country
+    sorted_results = sorted(
+        parsed_results["nodes_results"], 
+        key=lambda x: (x["continent"], x["country"], x["city"])
+    )
+    
+    for result in sorted_results:
+        location = f"{result['country']}, {result['city']}"
+        
+        status = f"{result['status_code']} {result['status_msg']}"
+        status_color = Fore.GREEN if result['success'] else Fore.RED
+        
+        response_time = f"{result['response_time']:.1f} ms" if result['success'] else "N/A"
+        
+        print(f"{location:<30} {status_color}{status:<15}{Style.RESET_ALL} {response_time:<15} {result['ip']:<15}")
+
+
+def save_results_to_file(data: Dict[str, Any], filename: str, format_type: str = "json") -> None:
+    """
+    Save results to a file in the specified format.
+    
+    Args:
+        data: Results data to save
+        filename: Output filename
+        format_type: Format to save in ('json' or 'txt')
+    """
+    if not filename:
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        check_type = data.get("check_type", "check")
+        filename = f"{check_type}_result_{timestamp}.{format_type}"
+    
+    try:
+        with open(filename, 'w', encoding='utf-8') as f:
+            if format_type == "json":
+                json.dump(data, f, indent=2)
+            else:
+                # Text format
+                f.write(f"Check Type: {data.get('check_type', 'unknown')}\n")
+                f.write(f"Host: {data.get('host', 'unknown')}\n")
+                f.write(f"Timestamp: {data.get('timestamp', datetime.now().isoformat())}\n\n")
+                
+                # Overall stats
+                f.write("Overall Statistics:\n")
+                overall = data.get("overall_stats", {})
+                f.write(f"  Success Rate: {overall.get('successful', 0)}/{overall.get('total', 0)}\n")
+                if data.get("check_type") == "ping":
+                    f.write(f"  Average RTT: {overall.get('avg_rtt', 0):.1f} ms\n")
+                    f.write(f"  Min/Max RTT: {overall.get('min_rtt', 0):.1f} ms / {overall.get('max_rtt', 0):.1f} ms\n")
+                else:
+                    f.write(f"  Average Response Time: {overall.get('avg_response_time', 0):.1f} ms\n")
+                
+                # Continent stats
+                f.write("\nStatistics by Continent:\n")
+                for continent, stats in data.get("continent_stats", {}).items():
+                    f.write(f"  {continent}:\n")
+                    f.write(f"    Success Rate: {stats.get('successful', 0)}/{stats.get('total', 0)}\n")
+                    if data.get("check_type") == "ping":
+                        f.write(f"    Average RTT: {stats.get('avg_rtt', 0):.1f} ms\n")
+                        f.write(f"    Min/Max RTT: {stats.get('min_rtt', 0):.1f} ms / {stats.get('max_rtt', 0):.1f} ms\n")
+                    else:
+                        f.write(f"    Average Response Time: {stats.get('avg_response_time', 0):.1f} ms\n")
+                
+                # Node results
+                f.write("\nDetailed Results by Node:\n")
+                if data.get("check_type") == "ping":
+                    for result in data.get("nodes_results", []):
+                        location = f"{result.get('country', 'Unknown')}, {result.get('city', 'Unknown')}"
+                        success_ratio = f"{result.get('successful', 0)}/{result.get('total', 0)}"
+                        if result.get('successful', 0) > 0:
+                            rtt_stats = f"{result.get('min_rtt', 0):.1f} / {result.get('avg_rtt', 0):.1f} / {result.get('max_rtt', 0):.1f} ms"
+                        else:
+                            rtt_stats = "N/A"
+                        f.write(f"{location:<30} {success_ratio:<10} {rtt_stats:<25} {result.get('ip', 'N/A'):<15}\n")
+                else:
+                    f.write(f"{'Location':<30} {'Status':<15} {'Response Time':<15} {'IP Address':<15}\n")
+                    f.write("-" * 80 + "\n")
+                    
+                    for result in data.get("nodes_results", []):
+                        location = f"{result.get('country', 'Unknown')}, {result.get('city', 'Unknown')}"
+                        status = f"{result.get('status_code', 'N/A')} {result.get('status_msg', 'N/A')}"
+                        response_time = f"{result.get('response_time', 0):.1f} ms" if result.get('success', False) else "N/A"
+                        
+                        f.write(f"{location:<30} {status:<15} {response_time:<15} {result.get('ip', 'N/A'):<15}\n")
+        
+        print(f"{Fore.GREEN}Results saved to {filename}")
+    except Exception as e:
+        print(f"{Fore.RED}Error saving results to file: {e}")
+
+
+def interactive_mode() -> None:
+    """Run the program in interactive mode, prompting for inputs."""
     while True:
+        print(f"\n{Fore.CYAN}=== Check-Host PING,HTTP,TCP,UDP,DNS Tester - Interactive Mode ==={Style.RESET_ALL}")
         print("\nOptions:")
         print("1. HTTP test")
-        print("2. Ping test")
+        print("2. PING test")
         print("3. TCP test")
         print("4. UDP test")
         print("5. DNS test")
         print("0. Exit")
         
-        choice = input(f"{Fore.GREEN}Enter your choice: {Style.RESET_ALL}")
+        choice = input(f"\n{Fore.YELLOW}Enter your choice (0-5): {Style.RESET_ALL}")
         
-        if choice == '0':
-            print(f"{Fore.CYAN}Goodbye!{Style.RESET_ALL}")
-            break
-        
-        if choice == '1':
-            url = input("Enter URL to Http : ").strip()
-            if not url.startswith(('http://', 'https://')):
-                url = 'https://' + url
-            results = tester.http_check(url)
-            display_http_results(results)
+        if choice == "0":
+            print(f"{Fore.GREEN}Exiting...{Style.RESET_ALL}")
+            sys.exit(0)
+        elif choice in ["1", "2", "3", "4", "5"]:
+            check_type = {
+                "1": "http",
+                "2": "ping",
+                "3": "tcp",
+                "4": "udp",
+                "5": "dns"
+            }[choice]
             
-        elif choice == '2':
-            host = input("Enter host to Ping: ").strip()
-            results = tester.ping(host)
-            display_ping_results(results)
+            # Get host to check
+            while True:
+                host = input(f"{Fore.YELLOW}Enter host to check (domain or IP): {Style.RESET_ALL}")
+                try:
+                    host = validate_host(host)
+                    break
+                except ValueError as e:
+                    print(f"{Fore.RED}{e}. Please try again.{Style.RESET_ALL}")
+            
+            # Get nodes selection
+            print(f"\n{Fore.CYAN}Available continent options:{Style.RESET_ALL}")
+            print("  ALL   - All available nodes")
+            print("  EU    - European nodes")
+            print("  NA    - North American nodes")
+            print("  AS    - Asian nodes")
+            print("  SA    - South American nodes")
+            print("  EU+NA - European and North American nodes")
+            
+            continent = input(f"\n{Fore.YELLOW}Select nodes by continent [default: ALL]: {Style.RESET_ALL}").upper() or "ALL"
+            nodes = get_nodes_selection(continent)
+            
+            print(f"\n{Fore.CYAN}Selected {len(nodes)} nodes from {continent or 'ALL'}{Style.RESET_ALL}")
+            
+            # Ask about saving results
+            save_option = input(f"{Fore.YELLOW}Save results to file? (y/n) [default: n]: {Style.RESET_ALL}").lower() or "n"
+            save_to_file = save_option in ["y", "yes"]
+            
+            if save_to_file:
+                format_type = input(f"{Fore.YELLOW}Save format (json/txt) [default: json]: {Style.RESET_ALL}").lower() or "json"
+                if format_type not in ["json", "txt"]:
+                    format_type = "json"
+                    print(f"{Fore.YELLOW}Invalid format. Using json instead.{Style.RESET_ALL}")
                 
-        elif choice == '3':
-            host = input("Enter host to Tcp: ").strip()
-            port = input("Enter port (leave empty for default): ").strip()
-            port = int(port) if port else None
-            if not host.startswith(('http://', 'https://')):
-                host = 'https://' + host
-            results = tester.tcp_check(host, port)
-            display_tcp_results(results)
-                
-        elif choice == '4':
-            host = input("Enter host to Udp: ").strip()
-            port = input("Enter port (leave empty for default): ").strip()
-            port = int(port) if port else None
-            if not host.startswith(('http://', 'https://')):
-                host = 'https://' + host
-            results = tester.udp_check(host, port)
-            display_udp_results(results)
-                
-        elif choice == '5':
-            domain = input("Enter host to Dns: ").strip()
-            record_type = input("Enter record type (A, MX, CNAME, etc. - leave empty for A): ").strip() or 'A'
-            if not domain.startswith(('http://', 'https://')):
-                domain = 'https://' + domain
-            results = tester.dns_check(domain, record_type)
-            display_dns_results(results)
-                
+                filename = input(f"{Fore.YELLOW}Filename [leave empty for auto-generated]: {Style.RESET_ALL}")
+            else:
+                format_type = "json"
+                filename = None
+            
+            # Run the check
+            run_check_and_display(check_type, host, nodes, save_to_file, filename, format_type)
         else:
-            print(f"{Fore.RED}Invalid choice. Please try again.{Style.RESET_ALL}")
-        
-        # Ask to save results
-        save = input("\nSave results to file? (y/n): ").lower()
-        if save == 'y':
-            filename = input("Enter filename: ").strip()
-            format = input("Format (json/text): ").lower().strip() or 'json'
-            save_results(results, filename, format)
+            print(f"{Fore.RED}Invalid choice. Please enter a number between 0 and 5.{Style.RESET_ALL}")
 
-def main():
-    """Main function to handle command line arguments."""
-    # Check if requests is installed
+
+def run_check_and_display(check_type: str, host: str, nodes: List[str], 
+                          save_to_file: bool = False, filename: Optional[str] = None,
+                          format_type: str = "json") -> None:
+    """
+    Run a check and display results.
+    
+    Args:
+        check_type: Type of check to run ('ping', 'http', 'tcp', 'udp', or 'dns')
+        host: Host to check
+        nodes: List of nodes to use
+        save_to_file: Whether to save results to file
+        filename: Filename to save to (or None for auto-generated)
+        format_type: Format to save in ('json' or 'txt')
+    """
+    api = CheckHostAPI()
+    
+    print(f"\n{Fore.CYAN}Running {check_type} check on {host} using {len(nodes)} nodes...{Style.RESET_ALL}")
+    
     try:
-        import requests
-    except ImportError:
-        print(f"{Fore.RED}Error: The 'requests' library is not installed.{Style.RESET_ALL}")
-        print(f"{Fore.YELLOW}Install it with: pip install requests{Style.RESET_ALL}")
-        print(f"{Fore.YELLOW}On Termux, use: pkg install python && pip install requests{Style.RESET_ALL}")
-        sys.exit(1)
-
-    # Set UTF-8 encoding
-    if sys.version_info[0] == 3 and sys.version_info[1] >= 7:
-        sys.stdout.reconfigure(encoding='utf-8')
-
-    parser = argparse.ArgumentParser(description='Network Diagnostic Tool')
-    subparsers = parser.add_subparsers(dest='command', required=False)
-
-    # HTTP command
-    http_parser = subparsers.add_parser('http', help='Perform HTTP test')
-    http_parser.add_argument('url', help='URL to test')
-    http_parser.add_argument('-o', '--output', help='Output file to save results')
-    http_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
-                          help='Output format')
-
-    # Ping command
-    ping_parser = subparsers.add_parser('ping', help='Perform ping test')
-    ping_parser.add_argument('host', help='Host to ping')
-    ping_parser.add_argument('-c', '--count', type=int, default=PING_COUNT, 
-                           help='Number of pings to send (not used in API check)')
-    ping_parser.add_argument('-o', '--output', help='Output file to save results')
-    ping_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
-                           help='Output format')
-
-    # TCP command
-    tcp_parser = subparsers.add_parser('tcp', help='Perform TCP test')
-    tcp_parser.add_argument('host', help='Host to test')
-    tcp_parser.add_argument('-p', '--port', type=int, help='Port number to check')
-    tcp_parser.add_argument('-o', '--output', help='Output file to save results')
-    tcp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
-                           help='Output format')
-
-    # UDP command
-    udp_parser = subparsers.add_parser('udp', help='Perform UDP test')
-    udp_parser.add_argument('host', help='Host to test')
-    udp_parser.add_argument('-p', '--port', type=int, help='Port number to check')
-    udp_parser.add_argument('-o', '--output', help='Output file to save results')
-    udp_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
-                           help='Output format')
-
-    # DNS command
-    dns_parser = subparsers.add_parser('dns', help='Perform DNS resolution test')
-    dns_parser.add_argument('domain', help='Domain to resolve')
-    dns_parser.add_argument('-t', '--type', default='A', 
-                          help='DNS record type to check (A, MX, CNAME, etc.)')
-    dns_parser.add_argument('-o', '--output', help='Output file to save results')
-    dns_parser.add_argument('-f', '--format', choices=['json', 'text'], default='json',
-                           help='Output format')
-
-    args = parser.parse_args()
-
-    tester = NetworkTester()
-
-    if not args.command:
-        clear_screen()
-        interactive_mode()
-        return
-
-    try:
-        if args.command == 'http':
-            results = tester.http_check(args.url)
-            display_http_results(results)
-            
-        elif args.command == 'ping':
-            results = tester.ping(args.host, args.count)
-            display_ping_results(results)
-                
-        elif args.command == 'tcp':
-            results = tester.tcp_check(args.host, args.port)
-            display_tcp_results(results)
-                
-        elif args.command == 'udp':
-            results = tester.udp_check(args.host, args.port)
-            display_udp_results(results)
-                
-        elif args.command == 'dns':
-            results = tester.dns_check(args.domain, args.type)
-            display_dns_results(results)
+        # Run the check
+        check_response = api.run_check(check_type, host, nodes)
         
-        # Save results if requested
-        if hasattr(args, 'output') and args.output:
-            save_results(results, args.output, args.format)
+        request_id = check_response.get("request_id")
+        print(f"{Fore.GREEN}Check initiated. Request ID: {request_id}{Style.RESET_ALL}")
+        print(f"{Fore.GREEN}Permanent link: {check_response.get('permanent_link')}{Style.RESET_ALL}")
+        
+        # Get check results
+        print(f"{Fore.CYAN}Fetching results (this may take a few seconds)...{Style.RESET_ALL}")
+        results = api.get_check_result(request_id)
+        
+        # Parse and display results
+        if check_type == "ping":
+            parsed_results = parse_ping_results(results)
+            display_ping_results(parsed_results)
+        elif check_type == "http":
+            parsed_results = parse_http_results(results)
+            display_http_results(parsed_results)
+        else:
+            # For TCP, UDP, and DNS tests, just show raw results
+            print("\n" + "=" * 80)
+            print(f"{Fore.CYAN}{check_type.upper()} RESULTS SUMMARY{Style.RESET_ALL}")
+            print("=" * 80)
+            print(json.dumps(results, indent=2))
+        
+        # Add metadata
+        full_results = {
+            "check_type": check_type,
+            "host": host,
+            "timestamp": datetime.now().isoformat(),
+            "permanent_link": check_response.get("permanent_link", ""),
+            "request_id": request_id,
+            "raw_results": results
+        }
+        
+        # For ping and http, add the parsed results
+        if check_type in ["ping", "http"]:
+            full_results.update(parsed_results)
+        
+        # Save to file if requested
+        if save_to_file:
+            save_results_to_file(full_results, filename, format_type)
             
     except Exception as e:
         print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
         sys.exit(1)
 
-if __name__ == '__main__':
+
+def main():
+    """Main function to parse command line arguments or start interactive mode."""
+    parser = argparse.ArgumentParser(
+        description='Check host availability and response times using the Check-Host API.',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python check_host.py                             # Start interactive mode
+  python check_host.py 1.1.1.1                     # Ping check with all nodes
+  python check_host.py google.com --type http      # HTTP check with all nodes
+  python check_host.py 1.1.1.1 --nodes EU          # Ping check with European nodes
+  python check_host.py example.com --save          # Save results to auto-generated file
+  python check_host.py 1.1.1.1 --output ping.json  # Save results to specific file
+"""
+    )
+    
+    parser.add_argument('host', nargs='?', help='Host to check (domain or IP)')
+    parser.add_argument('--type', choices=['ping', 'http', 'tcp', 'udp', 'dns'], default='ping',
+                      help='Type of check to perform (default: ping)')
+    parser.add_argument('--nodes', default='ALL',
+                      help='Nodes to use (ALL, EU, NA, AS, SA, EU+NA)')
+    parser.add_argument('--save', action='store_true',
+                      help='Save results to file')
+    parser.add_argument('--output', help='Output file name')
+    parser.add_argument('--format', choices=['json', 'txt'], default='json',
+                      help='Output format (default: json)')
+    
+    args = parser.parse_args()
+    
+    # If no host provided, run in interactive mode
+    if not args.host:
+        interactive_mode()
+    else:
+        try:
+            host = validate_host(args.host)
+            nodes = get_nodes_selection(args.nodes)
+            
+            save_to_file = args.save or args.output is not None
+            
+            run_check_and_display(
+                check_type=args.type,
+                host=host,
+                nodes=nodes,
+                save_to_file=save_to_file,
+                filename=args.output,
+                format_type=args.format
+            )
+            
+        except ValueError as e:
+            print(f"{Fore.RED}Error: {e}{Style.RESET_ALL}")
+            sys.exit(1)
+
+
+if __name__ == "__main__":
     try:
         main()
     except KeyboardInterrupt:
